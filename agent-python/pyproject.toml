@@ -7,8 +7,10 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "email-validator>=2.3.0",
-    "livekit-agents[openai]~=1.2",
+    "livekit-agents[assemblyai,deepgram,openai]~=1.2.14",
     "livekit-plugins-noise-cancellation~=0.2",
+    "openai>=2.2.0",
+    "pyaudio>=0.2.14",
     "python-dotenv>=1.1.1",
 ]
 
