@@ -7,7 +7,6 @@ from livekit import agents, rtc
 from livekit.agents import AgentSession, Agent, RoomInputOptions, llm
 from livekit.plugins import openai, elevenlabs
 from livekit.plugins.elevenlabs import tts as el_tts
-from elevenlabs import Voice
 
 try:
     from livekit.plugins import noise_cancellation
@@ -155,8 +154,8 @@ async def entrypoint(ctx: agents.JobContext):
         model="eleven_turbo_v2_5",  # Fast model for ~75-100ms latency
         api_key=os.getenv("ELEVEN_LABS"),
         enable_ssml_parsing=False,  # Disable for lower latency
-        chunk_length_schedule=[100, 160, 220],  # Smaller chunks for faster streaming
-        streaming_latency=2,
+        chunk_length_schedule=[50, 100, 150],  # Smaller chunks for faster streaming
+        streaming_latency=0,
     )
 
     # Configure AgentSession with optimized parameters for natural conversation
@@ -164,9 +163,19 @@ async def entrypoint(ctx: agents.JobContext):
         stt="deepgram/nova-2-conversationalai",  # Conversational AI model
         llm="openai/gpt-4o-mini",
         tts=tts_instance,
-        turn_detection=EnglishModel() if EnglishModel else None,  # Enhanced turn detection
-        min_endpointing_delay=0.4,  # 400ms silence for turn-taking (down from 500ms default)
-        min_interruption_duration=0.3,  # 300ms for responsive barge-in (down from 500ms default)
+
+        # CRITICAL: Enable preemptive generation for 500-800ms latency reduction
+        preemptive_generation=True,
+
+        # Use VAD for faster turn detection (vs semantic models)
+        turn_detection="vad",
+
+        # Aggressive endpointing for medical clinic context (250-350ms recommended)
+        min_endpointing_delay=0.3,  # Reduced from 0.4s for faster response
+        max_endpointing_delay=1.5,  # Prevent long waits
+
+        # Responsive interruptions for natural conversation flow
+        min_interruption_duration=0.25,  # Reduced from 0.3s for quicker barge-in
         allow_interruptions=True,  # Enable natural interruptions
     )
     original_agent = Assistant(latency_tracker)
