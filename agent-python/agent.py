@@ -4,7 +4,7 @@ import logging
 
 from livekit import agents, rtc
 from livekit.agents import AgentSession, Agent, RoomInputOptions, llm
-from livekit.plugins import openai
+from livekit.plugins import openai, deepgram
 try:
     from livekit.plugins import noise_cancellation
 except Exception:
@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 
 load_dotenv(".env.local")
 load_dotenv("../agent-starter-node/.env.local")
+
+
+TTS_MODEL = "aura-asteria-en"
 
 SYSTEM_PROMPT = (
     "You are a real-time voice assistant for a medical clinic that answers calls via LiveKit.\n"
@@ -37,14 +40,14 @@ SYSTEM_PROMPT = (
     "- GENERAL_INFO — Answer brief factual questions (hours, location, insurance) and offer to help book.\n"
     "- ESCALATE_TO_HUMAN — On request or urgent symptoms, connect to staff. If urgent symptoms are mentioned, advise calling emergency services first.\n\n"
     "Opening & Guidance\n"
-    "- Start with a friendly greeting and scope (appointments & quick info). Identify intent quickly; keep on track; handle objections politely (e.g., offer secure follow-up if they won’t share insurance now).\n\n"
+    "- Start with a friendly greeting and scope (appointments & quick info). Identify intent quickly; keep on track; handle objections politely (e.g., offer secure follow-up if they won't share insurance now).\n\n"
     "Safety & Escalation\n"
-    "- If emergency symptoms are mentioned (e.g., chest pain, trouble breathing, stroke signs): Say: ‘This sounds urgent. Please hang up and dial emergency services immediately, or I can connect you to a staff member now.’ Immediately escalate_to_human. Do not continue routine booking.\n"
+    "- If emergency symptoms are mentioned (e.g., chest pain, trouble breathing, stroke signs): Say: 'This sounds urgent. Please hang up and dial emergency services immediately, or I can connect you to a staff member now.' Immediately escalate_to_human. Do not continue routine booking.\n"
     "- On explicit requests to speak with staff, escalate and promise a callback if disconnected.\n\n"
     "Data Collection & Confirmation\n"
     "- Always confirm critical details (name spelling if low confidence, date/time, contact). Repeat date/time in a friendly way. Offer nearest alternatives if unavailable. Summarize actions and ask yes/no before booking/cancel/reschedule. After success, confirm and state a confirmation will be sent.\n\n"
     "Responses: Style for Real-Time TTS\n"
-    "- Prefer one sentence at a time when streaming. Use brief acknowledgments (‘Got it’, ‘Thanks, Sarah’). Avoid long monologues; quickly prompt for the next field.\n\n"
+    "- Prefer one sentence at a time when streaming. Use brief acknowledgments ('Got it', 'Thanks, Sarah'). Avoid long monologues; quickly prompt for the next field.\n\n"
     "Tool Calling (contract)\n"
     "- When needed, call tools with strict JSON. Never fabricate outputs. Validate required slots before booking/cancel/reschedule. Offer top 1–2 slots first. If a tool fails, apologize and retry once; otherwise offer escalation.\n"
 )
@@ -109,9 +112,11 @@ class Assistant(Agent):
 async def entrypoint(ctx: agents.JobContext):
     latency_tracker = LatencyTracker()
     logger.info(
-        " Initializing Medical Clinic Voice Agent with Latency Monitoring...")
+        f" Initializing Medical Clinic Voice Agent with Latency Monitoring...")
+    logger.info(f" TTS Configuration: Deepgram Aura - Model={TTS_MODEL}")
 
-    tts_instance = openai.TTS(voice="nova")
+    tts_instance = deepgram.TTS(model=TTS_MODEL)
+    
     session = AgentSession(
         stt="deepgram/nova-2",
         llm="openai/gpt-4o-mini",
