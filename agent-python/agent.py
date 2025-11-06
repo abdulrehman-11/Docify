@@ -1,86 +1,250 @@
 from dotenv import load_dotenv
+import time
+import logging
+import os
 
-from livekit import agents
-from livekit.agents import AgentSession, Agent, RoomInputOptions
-from livekit.plugins import (
-    openai,
-    noise_cancellation,
-)
+from livekit import agents, rtc
+from livekit.agents import AgentSession, Agent, RoomInputOptions, llm
+from livekit.plugins import openai, elevenlabs
+from livekit.plugins.elevenlabs import tts as el_tts
+from elevenlabs import Voice
+
+try:
+    from livekit.plugins import noise_cancellation
+    from livekit.plugins.turn_detector.english import EnglishModel
+except Exception:
+    noise_cancellation = None
+    EnglishModel = None
 from tools.router import ToolRouter
 from tools.handlers import register_handlers
 
-# Try local .env first, then parent .env.local (from node starter), else default
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 load_dotenv(".env.local")
 load_dotenv("../agent-starter-node/.env.local")
 
-
-SYSTEM_PROMPT = (
-  "You are a real-time voice assistant for a medical clinic that answers calls via LiveKit.\n"
-  "Primary goals: schedule, reschedule, cancel appointments; provide concise clinic info; escalate to a human when requested or when safety triggers fire. The user may interrupt (barge-in) at any time—be responsive and natural.\n\n"
-  "Conversation Contract\n"
-  "1) Tone & pacing: Warm, concise, professional. Prefer short sentences. Insert brief natural pauses when confirming critical details.\n"
-  "2) Turn-taking: When the caller stops speaking, start responding quickly, in short fragments. If the caller speaks while you talk, stop and listen.\n"
-  "3) Transparency: If unsure, ask a direct clarifying question instead of guessing.\n"
-  "4) No medical advice: Do not diagnose, prescribe, or provide treatment advice.\n"
-  "5) PII/PHI: Only ask for needed fields (name, reason, preferred time, insurance, phone, email). Confirm before storing or sending confirmations.\n\n"
-  "Supported Intents\n"
-  "- APPOINTMENT_BOOKING — Collect name, reason, preferred time, insurance, phone, email → check availability → propose slot → confirm → book → send confirmation.\n"
-  "- APPOINTMENT_CANCELLATION — Collect name + date/time (optional reason) → confirm → cancel → confirm done → offer to reschedule later.\n"
-  "- APPOINTMENT_RESCHEDULING — Collect name + current slot + new preference → propose alternatives → confirm → reschedule → send updated confirmation.\n"
-  "- GENERAL_INFO — Answer brief factual questions (hours, location, insurance) and offer to help book.\n"
-  "- ESCALATE_TO_HUMAN — On request or urgent symptoms, connect to staff. If urgent symptoms are mentioned, advise calling emergency services first.\n\n"
-  "Opening & Guidance\n"
-  "- Start with a friendly greeting and scope (appointments & quick info). Identify intent quickly; keep on track; handle objections politely (e.g., offer secure follow-up if they won’t share insurance now).\n\n"
-  "Safety & Escalation\n"
-  "- If emergency symptoms are mentioned (e.g., chest pain, trouble breathing, stroke signs): Say: ‘This sounds urgent. Please hang up and dial emergency services immediately, or I can connect you to a staff member now.’ Immediately escalate_to_human. Do not continue routine booking.\n"
-  "- On explicit requests to speak with staff, escalate and promise a callback if disconnected.\n\n"
-  "Data Collection & Confirmation\n"
-  "- Always confirm critical details (name spelling if low confidence, date/time, contact). Repeat date/time in a friendly way. Offer nearest alternatives if unavailable. Summarize actions and ask yes/no before booking/cancel/reschedule. After success, confirm and state a confirmation will be sent.\n\n"
-  "Responses: Style for Real-Time TTS\n"
-  "- Prefer one sentence at a time when streaming. Use brief acknowledgments (‘Got it’, ‘Thanks, Sarah’). Avoid long monologues; quickly prompt for the next field.\n\n"
-  "Tool Calling (contract)\n"
-  "- When needed, call tools with strict JSON. Never fabricate outputs. Validate required slots before booking/cancel/reschedule. Offer top 1–2 slots first. If a tool fails, apologize and retry once; otherwise offer escalation.\n"
+HUMANLY_SYSTEM_PROMPT = (
+    "Hey! You're a real-time voice assistant for The Hexaa Clinic, and honestly, you're basically just having a friendly phone conversation with folks who call in.\n\n"
+    "Your main thing is helping people with appointments—booking 'em, moving 'em around, canceling 'em—and answering quick questions about the clinic. If someone needs to talk to a real person or if something sounds urgent, you'll get them connected right away.\n\n"
+    "How to Sound Human:\n"
+    "- Talk like a real person! Use contractions (I'll, we're, that's, can't, you're, there's, it's).\n"
+    "- Throw in natural fillers when it makes sense: 'um', 'uh', 'like', 'you know', 'I mean', 'so', 'well'.\n"
+    "- Acknowledge what they say naturally: 'Gotcha', 'Alright', 'Cool', 'Sure thing', 'Makes sense', 'I hear you', 'Right', 'Okay', 'Totally'.\n"
+    "- Use conversational transitions: 'So', 'Anyway', 'By the way', 'Actually', 'Oh', 'Hmm'.\n"
+    "- Show empathy: 'I totally understand', 'That makes sense', 'No worries', 'I get it', 'For sure'.\n"
+    "- Keep it short and snappy—like you're texting, but talking. One or two sentences at a time.\n"
+    "- If they interrupt you (and they can!), just stop and listen. It's totally normal in conversation.\n\n"
+    "What You Can Help With:\n"
+    "1) Booking appointments — You'll need their name, what they're coming in for, when they wanna come in, insurance info, phone number, and email. Check if the time works, suggest something, confirm it, book it, and let 'em know they'll get a confirmation.\n"
+    "2) Canceling appointments — Get their name and when their appointment is (maybe why they're canceling if they wanna share). Confirm, cancel it, let 'em know it's done, and see if they wanna reschedule for later.\n"
+    "3) Rescheduling appointments — Find out their name, when their current appointment is, and when they'd rather come in. Give 'em some options, confirm the new time, reschedule it, and they'll get an updated confirmation.\n"
+    "4) Quick clinic info — Hours, location, what insurance you take, stuff like that. Keep it brief and then see if they need an appointment.\n"
+    "5) Connecting to a real person — If they ask to talk to someone or if you hear anything that sounds serious or urgent, get 'em to a staff member ASAP.\n\n"
+    "Super Important Safety Stuff:\n"
+    "- If someone mentions emergency symptoms—like chest pain, can't breathe, stroke signs, anything scary like that—you gotta stop what you're doing and say something like: 'Okay, this sounds really urgent. You should hang up and call 911 right now, or I can connect you to someone here immediately.' Then escalate to a human. Don't keep trying to book an appointment.\n"
+    "- If they just wanna talk to a person, no problem—connect 'em and let 'em know someone'll call back if you get disconnected.\n\n"
+    "Ground Rules:\n"
+    "- You're NOT a doctor. Don't diagnose anything, don't prescribe meds, don't give medical advice. If they're asking about symptoms or treatments, that's a 'talk to a real person' situation.\n"
+    "- Only ask for the info you actually need: name, reason for visit, preferred time, insurance, phone, email. And like, confirm before you store anything or send confirmations—respect their privacy.\n"
+    "- If you're not sure about something, just ask! Don't guess. It's way better to clarify than to mess something up.\n\n"
+    "How to Collect Info Smoothly:\n"
+    "- Always double-check the important stuff—like if you didn't quite catch their name, ask 'em to spell it. Repeat dates and times back to 'em in a natural way.\n"
+    "- If the time they want isn't available, offer the closest alternatives.\n"
+    "- Before you actually book, cancel, or reschedule, give 'em a quick summary and make sure they're good with it.\n"
+    "- After you're done, confirm it worked and let 'em know they'll get a confirmation message.\n\n"
+    "Conversation Flow:\n"
+    "- Start friendly: 'Hey, thanks for calling Hexaa Clinic! What can I do for you?'\n"
+    "- Keep things moving but don't rush 'em. If they're chatty, that's cool, but gently guide back to what they need.\n"
+    "- If they don't wanna share something (like insurance right now), no worries—offer to follow up securely later.\n\n"
+    "Using Tools:\n"
+    "- When you need to check availability, book, cancel, or reschedule, you'll use tools. Just make sure you have all the info you need first.\n"
+    "- Never make up results—only share what the tools actually tell you.\n"
+    "- If something doesn't work, apologize, try once more, and if it still doesn't work, offer to connect them to someone who can help.\n"
+    "- When you're giving appointment options, just give 'em the top 1 or 2 choices—don't overwhelm 'em with a million options.\n\n"
+    "Examples of How You'd Sound:\n"
+    "- 'Alright, so you're looking to book an appointment—gotcha. Can I grab your name real quick?'\n"
+    "- 'Hmm, let me check... okay, so Tuesday at 3 is open, or I've got Thursday at 10. Which one works better for you?'\n"
+    "- 'Cool, I'll get that canceled for you. Just to confirm, that's the appointment on the 15th at 2pm, right?'\n"
+    "- 'No worries if you don't have your insurance info handy—we can handle that when you come in.'\n"
+    "- 'Wait, that sounds pretty urgent. I really think you should call 911, or I can get you to someone here right now. What do you wanna do?'\n"
+    "- 'Perfect, you're all set! You'll get a confirmation text and email in just a sec.'\n\n"
+    "Remember: You're helpful, warm, and real. Not a robot. Just a friendly person on the other end of the phone trying to make their day a little easier.\n"
 )
 
 
+
+
+class LatencyTracker:
+
+    def __init__(self):
+        self.last_user_speech_end = None
+        self.latencies = []
+        self.turn_count = 0
+
+    def record_user_speech_end(self):
+        self.last_user_speech_end = time.time()
+
+    def record_agent_response_start(self):
+        if self.last_user_speech_end:
+            latency = time.time() - self.last_user_speech_end
+            self.latencies.append(latency)
+            self.turn_count += 1
+
+            # Updated thresholds for 500ms target
+            if latency < 0.5:
+                status = "🟢 EXCELLENT"
+            elif latency < 0.75:
+                status = "🟡 GOOD"
+            elif latency < 1.0:
+                status = "🟠 WARNING"
+            else:
+                status = "🔴 POOR"
+
+            logger.info(f"\n{'='*60}")
+            logger.info(f"⏱️  LATENCY MEASUREMENT #{self.turn_count}")
+            logger.info(f"   Response Time: {latency*1000:.0f}ms - {status}")
+            logger.info(f"   Target: < 500ms")
+
+            if latency < 0.5:
+                logger.info(
+                    f"   Status: Under target by {(0.5 - latency)*1000:.0f}ms ✓")
+            else:
+                logger.info(
+                    f"   Status: Over target by {(latency - 0.5)*1000:.0f}ms ✗")
+
+            if len(self.latencies) > 1:
+                avg = sum(self.latencies) / len(self.latencies)
+                min_lat = min(self.latencies)
+                max_lat = max(self.latencies)
+                under_500ms = sum(1 for l in self.latencies if l < 0.5)
+                under_1s = sum(1 for l in self.latencies if l < 1.0)
+
+                logger.info(f"\n📊 STATISTICS:")
+                logger.info(f"   Average: {avg*1000:.0f}ms")
+                logger.info(f"   Best:    {min_lat*1000:.0f}ms")
+                logger.info(f"   Worst:   {max_lat*1000:.0f}ms")
+                logger.info(f"   Turns:   {len(self.latencies)}")
+                logger.info(f"   Success Rate (<500ms): {(under_500ms/len(self.latencies))*100:.1f}%")
+                logger.info(f"   Acceptable Rate (<1s): {(under_1s/len(self.latencies))*100:.1f}%")
+
+            logger.info(f"{'='*60}\n")
+
+            self.last_user_speech_end = None
+            return latency
+        return None
+
+
 class Assistant(Agent):
-  def __init__(self) -> None:
-    super().__init__(instructions=SYSTEM_PROMPT)
+    def __init__(self, latency_tracker: LatencyTracker) -> None:
+        super().__init__(instructions=HUMANLY_SYSTEM_PROMPT)
+        self.latency_tracker = latency_tracker
 
 
 async def entrypoint(ctx: agents.JobContext):
-  # Use OpenAI Realtime voice model for fast end-to-end voice
-  session = AgentSession(
-    stt="assemblyai/universal-streaming:en",
-    llm="openai/gpt-4.1-mini",
-    tts="deepgram/aura-luna",  # pick your preferred Aura voice
-  )
+    latency_tracker = LatencyTracker()
+    logger.info(
+        "🚀 Initializing Medical Clinic Voice Agent with Latency Monitoring...")
 
-  await session.start(
-    room=ctx.room,
-    agent=Assistant(),
-    room_input_options=RoomInputOptions(
-      # Enhanced noise cancellation (omit if self-hosting)
-      noise_cancellation=noise_cancellation.BVC(),
-    ),
-  )
-
-  # Initial greeting keeps with contract: short and scoped
-  await session.generate_reply(
-    instructions=(
-      "Hello. I can help with appointments and quick clinic info. "
-      "What do you need today?"
+    # Configure ElevenLabs TTS for natural, low-latency speech
+    tts_instance = el_tts.TTS(
+        voice_id="xjL0lSrjZ5UevVow5tT4",
+        model="eleven_turbo_v2_5",  # Fast model for ~75-100ms latency
+        api_key=os.getenv("ELEVEN_LABS"),
+        enable_ssml_parsing=False,  # Disable for lower latency
+        chunk_length_schedule=[100, 160, 220],  # Smaller chunks for faster streaming
+        streaming_latency=2,
     )
-  )
 
-  # Example: tool router ready for external integrations
-  router = ToolRouter()
-  register_handlers(router)
-  # Store router if needed by downstream components
-  # ctx.proc.userData["tool_router"] = router
+    # Configure AgentSession with optimized parameters for natural conversation
+    session = AgentSession(
+        stt="deepgram/nova-2-conversationalai",  # Conversational AI model
+        llm="openai/gpt-4o-mini",
+        tts=tts_instance,
+        turn_detection=EnglishModel() if EnglishModel else None,  # Enhanced turn detection
+        min_endpointing_delay=0.4,  # 400ms silence for turn-taking (down from 500ms default)
+        min_interruption_duration=0.3,  # 300ms for responsive barge-in (down from 500ms default)
+        allow_interruptions=True,  # Enable natural interruptions
+    )
+    original_agent = Assistant(latency_tracker)
+    original_generate = session.generate_reply
+    last_input_time = [None]
 
+    async def tracked_generate(*args, **kwargs):
+        """Wrapper to track when agent starts responding"""
+        if last_input_time[0] is None:
+            last_input_time[0] = time.time()
+            logger.info("🎤 USER INPUT RECEIVED - Starting to process...")
+
+        logger.info("🤖 AGENT GENERATING RESPONSE...")
+        result = await original_generate(*args, **kwargs)
+        if last_input_time[0]:
+            latency = time.time() - last_input_time[0]
+            latency_tracker.latencies.append(latency)
+            latency_tracker.turn_count += 1
+
+            # Updated thresholds for 500ms target
+            if latency < 0.5:
+                status = "🟢 EXCELLENT"
+            elif latency < 0.75:
+                status = "🟡 GOOD"
+            elif latency < 1.0:
+                status = "🟠 WARNING"
+            else:
+                status = "🔴 POOR"
+
+            logger.info(f"\n{'='*60}")
+            logger.info(f"⏱️  LATENCY MEASUREMENT #{latency_tracker.turn_count}")
+            logger.info(f"   Response Time: {latency*1000:.0f}ms - {status}")
+            logger.info(f"   Target: < 500ms")
+
+            if latency < 0.5:
+                logger.info(
+                    f"   Status: Under target by {(0.5 - latency)*1000:.0f}ms ✓")
+            else:
+                logger.info(
+                    f"   Status: Over target by {(latency - 0.5)*1000:.0f}ms ✗")
+            if len(latency_tracker.latencies) > 1:
+                avg = sum(latency_tracker.latencies) / \
+                    len(latency_tracker.latencies)
+                min_lat = min(latency_tracker.latencies)
+                max_lat = max(latency_tracker.latencies)
+                under_500ms = sum(1 for l in latency_tracker.latencies if l < 0.5)
+                under_1s = sum(1 for l in latency_tracker.latencies if l < 1.0)
+
+                logger.info(f"\n📊 STATISTICS:")
+                logger.info(f"   Average: {avg*1000:.0f}ms")
+                logger.info(f"   Best:    {min_lat*1000:.0f}ms")
+                logger.info(f"   Worst:   {max_lat*1000:.0f}ms")
+                logger.info(f"   Turns:   {len(latency_tracker.latencies)}")
+                logger.info(f"   Success Rate (<500ms): {(under_500ms/len(latency_tracker.latencies))*100:.1f}%")
+                logger.info(f"   Acceptable Rate (<1s): {(under_1s/len(latency_tracker.latencies))*100:.1f}%")
+
+            logger.info(f"{'='*60}\n")
+
+            last_input_time[0] = None
+
+        return result
+    session.generate_reply = tracked_generate
+    await session.start(
+        room=ctx.room,
+        agent=original_agent,
+        room_input_options=RoomInputOptions(
+            noise_cancellation=(noise_cancellation.BVCTelephony()
+                                if noise_cancellation is not None
+                                else None),
+        ),
+    )
+
+    logger.info("✅ Agent ready! Monitoring latency for all interactions.\n")
+    await session.generate_reply(
+        instructions="Greet them in a friendly, natural way and ask what you can help with today."
+    )
+    router = ToolRouter()
+    register_handlers(router)
 
 if __name__ == "__main__":
-  agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
-
-
+    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))

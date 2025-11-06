@@ -6,10 +6,18 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "email-validator>=2.3.0",
-    "livekit-agents[openai]~=1.2",
+    "elevenlabs>=2.22.0",
+    "email-validator>=2.0.0",
+    "livekit-agents[assemblyai,deepgram,openai]~=1.2.14",
+    "livekit-plugins-elevenlabs~=1.2.17",
     "livekit-plugins-noise-cancellation~=0.2",
-    "python-dotenv>=1.1.1",
+    "livekit-plugins-turn-detector~=1.2.11",
+    "logger>=1.4",
+    "openai>=1.0.0",
+    "pyaudio>=0.2.14",
+    "pydantic[email]>=2.0.0",
+    "pyjwt>=2.0.0",
+    "python-dotenv>=0.19.0",
 ]
 
 [build-system]
