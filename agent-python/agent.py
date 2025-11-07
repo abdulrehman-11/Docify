@@ -21,15 +21,16 @@ logger = logging.getLogger(__name__)
 load_dotenv(".env.local")
 load_dotenv("../agent-starter-node/.env.local")
 
-
-TTS_MODEL = "aura-asteria-en"
+TTS_MODEL = "aura-asteria-en"  
+TTS_SAMPLE_RATE = 24000  
+TTS_ENCODING = "linear16"  
 
 SYSTEM_PROMPT = (
     "You are a real-time voice assistant for a medical clinic that answers calls via LiveKit.\n"
     "Primary goals: schedule, reschedule, cancel appointments; provide concise clinic info; escalate to a human when requested or when safety triggers fire. The user may interrupt (barge-in) at any time—be responsive and natural.\n\n"
     "Conversation Contract\n"
-    "1) Tone & pacing: Warm, concise, professional. Prefer short sentences. Insert brief natural pauses when confirming critical details.\n"
-    "2) Turn-taking: When the caller stops speaking, start responding quickly, in short fragments. If the caller speaks while you talk, stop and listen.\n"
+    "1) Tone & pacing: Warm, concise, professional. Keep responses VERY SHORT (1-2 sentences max per turn). Speak naturally without unnecessary pauses.\n"
+    "2) Turn-taking: When the caller stops speaking, start responding quickly with brief acknowledgments. If the caller speaks while you talk, stop and listen.\n"
     "3) Transparency: If unsure, ask a direct clarifying question instead of guessing.\n"
     "4) No medical advice: Do not diagnose, prescribe, or provide treatment advice.\n"
     "5) PII/PHI: Only ask for needed fields (name, reason, preferred time, insurance, phone, email). Confirm before storing or sending confirmations.\n\n"
@@ -47,14 +48,13 @@ SYSTEM_PROMPT = (
     "Data Collection & Confirmation\n"
     "- Always confirm critical details (name spelling if low confidence, date/time, contact). Repeat date/time in a friendly way. Offer nearest alternatives if unavailable. Summarize actions and ask yes/no before booking/cancel/reschedule. After success, confirm and state a confirmation will be sent.\n\n"
     "Responses: Style for Real-Time TTS\n"
-    "- Prefer one sentence at a time when streaming. Use brief acknowledgments ('Got it', 'Thanks, Sarah'). Avoid long monologues; quickly prompt for the next field.\n\n"
+    "- CRITICAL: Keep ALL responses under 20 words. Use single, short sentences. Quick acknowledgments only ('Got it', 'Thanks', 'Perfect'). Never use multiple sentences in one turn unless absolutely necessary.\n\n"
     "Tool Calling (contract)\n"
     "- When needed, call tools with strict JSON. Never fabricate outputs. Validate required slots before booking/cancel/reschedule. Offer top 1–2 slots first. If a tool fails, apologize and retry once; otherwise offer escalation.\n"
 )
 
 
 class LatencyTracker:
-
     def __init__(self):
         self.last_user_speech_end = None
         self.latencies = []
@@ -76,11 +76,9 @@ class LatencyTracker:
             logger.info(f"   Target: < 1.000s")
 
             if latency < 1.0:
-                logger.info(
-                    f"   Status: Under target by {(1.0 - latency):.3f}s ✓")
+                logger.info(f"   Status: Under target by {(1.0 - latency):.3f}s ✓")
             else:
-                logger.info(
-                    f"   Status: Over target by {(latency - 1.0):.3f}s ✗")
+                logger.info(f"   Status: Over target by {(latency - 1.0):.3f}s ✗")
 
             if len(self.latencies) > 1:
                 avg = sum(self.latencies) / len(self.latencies)
@@ -111,29 +109,33 @@ class Assistant(Agent):
 
 async def entrypoint(ctx: agents.JobContext):
     latency_tracker = LatencyTracker()
-    logger.info(
-        f" Initializing Medical Clinic Voice Agent with Latency Monitoring...")
-    logger.info(f" TTS Configuration: Deepgram Aura - Model={TTS_MODEL}")
+    logger.info(" Initializing Optimized Medical Clinic Voice Agent...")
+    logger.info(f"  TTS: Deepgram Aura - {TTS_MODEL} | Sample Rate: {TTS_SAMPLE_RATE}Hz")
 
-    tts_instance = deepgram.TTS(model=TTS_MODEL)
-    
+    tts_instance = deepgram.TTS(
+        model=TTS_MODEL,
+        sample_rate=TTS_SAMPLE_RATE,
+        encoding=TTS_ENCODING,
+    )
     session = AgentSession(
         stt="deepgram/nova-2",
-        llm="openai/gpt-4o-mini",
+        llm="openai/gpt-4o-mini",  
         tts=tts_instance,
     )
+    
     original_agent = Assistant(latency_tracker)
     original_generate = session.generate_reply
     last_input_time = [None]
 
     async def tracked_generate(*args, **kwargs):
-        """Wrapper to track when agent starts responding"""
+
         if last_input_time[0] is None:
             last_input_time[0] = time.time()
-            logger.info(" USER INPUT RECEIVED - Starting to process...")
+            logger.info(" USER INPUT RECEIVED - Processing...")
 
-        logger.info(" AGENT GENERATING RESPONSE...")
+        logger.info("AGENT GENERATING RESPONSE...")
         result = await original_generate(*args, **kwargs)
+        
         if last_input_time[0]:
             latency = time.time() - last_input_time[0]
             latency_tracker.latencies.append(latency)
@@ -146,14 +148,12 @@ async def entrypoint(ctx: agents.JobContext):
             logger.info(f"   Target: < 1.000s")
 
             if latency < 1.0:
-                logger.info(
-                    f"   Status: Under target by {(1.0 - latency):.3f}s ✓")
+                logger.info(f"   Status: Under target by {(1.0 - latency):.3f}s ✓")
             else:
-                logger.info(
-                    f"   Status: Over target by {(latency - 1.0):.3f}s ✗")
+                logger.info(f"   Status: Over target by {(latency - 1.0):.3f}s ✗")
+                
             if len(latency_tracker.latencies) > 1:
-                avg = sum(latency_tracker.latencies) / \
-                    len(latency_tracker.latencies)
+                avg = sum(latency_tracker.latencies) / len(latency_tracker.latencies)
                 min_lat = min(latency_tracker.latencies)
                 max_lat = max(latency_tracker.latencies)
                 logger.info(f"\n STATISTICS:")
@@ -163,16 +163,16 @@ async def entrypoint(ctx: agents.JobContext):
                 logger.info(f"   Turns:   {len(latency_tracker.latencies)}")
 
                 under_1s = sum(1 for l in latency_tracker.latencies if l < 1.0)
-                success_rate = (
-                    under_1s / len(latency_tracker.latencies)) * 100
+                success_rate = (under_1s / len(latency_tracker.latencies)) * 100
                 logger.info(f"   Success Rate: {success_rate:.1f}% (under 1s)")
 
             logger.info(f"{'='*60}\n")
-
             last_input_time[0] = None
 
         return result
+    
     session.generate_reply = tracked_generate
+    
     await session.start(
         room=ctx.room,
         agent=original_agent,
@@ -183,12 +183,15 @@ async def entrypoint(ctx: agents.JobContext):
         ),
     )
 
-    logger.info("Agent ready! Monitoring latency for all interactions.\n")
+    logger.info(" Agent ready! Monitoring latency...\n")
+    
     await session.generate_reply(
-        instructions="Greet briefly and ask how you can help."
+        instructions="Say: 'Hello! How can I help you today?' Keep it under 10 words."
     )
+    
     router = ToolRouter()
     register_handlers(router)
+
 
 if __name__ == "__main__":
     agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
