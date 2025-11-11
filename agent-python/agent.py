@@ -160,7 +160,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     # Configure ElevenLabs TTS for natural, low-latency speech
     tts_instance = el_tts.TTS(
-        voice_id="M7UK1Bhm8FI3u8guNN9Yj",
+        voice_id="M7UK1Bhm8FI3u8guNN9Y",
         model="eleven_turbo_v2_5",  # Fast model for ~75-100ms latency
         api_key=os.getenv("ELEVEN_LABS"),
         enable_ssml_parsing=False,  # Disable for lower latency
