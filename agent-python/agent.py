@@ -5,8 +5,9 @@ import os
 
 from livekit import agents, rtc
 from livekit.agents import AgentSession, Agent, RoomInputOptions, llm
-from livekit.plugins import openai, elevenlabs
+from livekit.plugins import openai, elevenlabs, cartesia
 from livekit.plugins.elevenlabs import tts as el_tts
+from elevenlabs import Voice
 
 try:
     from livekit.plugins import noise_cancellation
@@ -16,6 +17,7 @@ except Exception:
     EnglishModel = None
 from tools.router import ToolRouter
 from tools.handlers import register_handlers
+from tools.livekit_tools import create_livekit_tools
 
 logging.basicConfig(
     level=logging.INFO,
@@ -138,8 +140,8 @@ class LatencyTracker:
 
 
 class Assistant(Agent):
-    def __init__(self, latency_tracker: LatencyTracker) -> None:
-        super().__init__(instructions=HUMANLY_SYSTEM_PROMPT)
+    def __init__(self, latency_tracker: LatencyTracker, tools: list = None) -> None:
+        super().__init__(instructions=HUMANLY_SYSTEM_PROMPT, tools=tools)
         self.latency_tracker = latency_tracker
 
 
@@ -148,37 +150,44 @@ async def entrypoint(ctx: agents.JobContext):
     logger.info(
         "🚀 Initializing Medical Clinic Voice Agent with Latency Monitoring...")
 
+    # Initialize tool router and handlers
+    router = ToolRouter()
+    register_handlers(router)
+
+    # Create LiveKit-compatible tools
+    livekit_tools = create_livekit_tools(router)
+    logger.info(f"📦 Registered {len(router.list_tools())} tools: {', '.join(router.list_tools())}")
+
     # Configure ElevenLabs TTS for natural, low-latency speech
     tts_instance = el_tts.TTS(
-        voice_id="xjL0lSrjZ5UevVow5tT4",
+        voice_id="M7UK1Bhm8FI3u8guNN9Yj",
         model="eleven_turbo_v2_5",  # Fast model for ~75-100ms latency
         api_key=os.getenv("ELEVEN_LABS"),
         enable_ssml_parsing=False,  # Disable for lower latency
-        chunk_length_schedule=[50, 100, 150],  # Smaller chunks for faster streaming
-        streaming_latency=0,
+        chunk_length_schedule=[100, 160, 220],  # Smaller chunks for faster streaming
+        streaming_latency=2,
     )
+
+    # logger.info("🎙️  Configuring Cartesia Sonic TTS...")
+    # tts_instance = cartesia.TTS(
+    #     model="sonic-english",
+    #     voice="156fb8d2-335b-4950-9cb3-a2d33befec77",  # Natural conversational voice
+    #     encoding="pcm_s16le",
+    #     sample_rate=24000,
+    # )
+    # logger.info("✅ Cartesia TTS initialized successfully")
 
     # Configure AgentSession with optimized parameters for natural conversation
     session = AgentSession(
         stt="deepgram/nova-2-conversationalai",  # Conversational AI model
         llm="openai/gpt-4o-mini",
         tts=tts_instance,
-
-        # CRITICAL: Enable preemptive generation for 500-800ms latency reduction
-        preemptive_generation=True,
-
-        # Use VAD for faster turn detection (vs semantic models)
-        turn_detection="vad",
-
-        # Aggressive endpointing for medical clinic context (250-350ms recommended)
-        min_endpointing_delay=0.3,  # Reduced from 0.4s for faster response
-        max_endpointing_delay=1.5,  # Prevent long waits
-
-        # Responsive interruptions for natural conversation flow
-        min_interruption_duration=0.25,  # Reduced from 0.3s for quicker barge-in
+        turn_detection=EnglishModel() if EnglishModel else None,  # Enhanced turn detection
+        min_endpointing_delay=0.4,  # 400ms silence for turn-taking (down from 500ms default)
+        min_interruption_duration=0.3,  # 300ms for responsive barge-in (down from 500ms default)
         allow_interruptions=True,  # Enable natural interruptions
     )
-    original_agent = Assistant(latency_tracker)
+    original_agent = Assistant(latency_tracker, tools=livekit_tools)
     original_generate = session.generate_reply
     last_input_time = [None]
 
@@ -252,8 +261,6 @@ async def entrypoint(ctx: agents.JobContext):
     await session.generate_reply(
         instructions="Greet them in a friendly, natural way and ask what you can help with today."
     )
-    router = ToolRouter()
-    register_handlers(router)
 
 if __name__ == "__main__":
     agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
