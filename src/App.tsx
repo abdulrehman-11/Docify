@@ -8,6 +8,14 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import StaffDashboard from "./pages/staff/StaffDashboard";
+import AdminAppointments from "./pages/admin/Appointments";
+import Clinic from "./pages/admin/Clinic";
+import Providers from "./pages/admin/Providers";
+import Services from "./pages/admin/Services";
+import Knowledge from "./pages/admin/Knowledge";
+import Notifications from "./pages/admin/Notifications";
+import Audit from "./pages/admin/Audit";
+import StaffAppointments from "./pages/staff/Appointments";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +39,62 @@ const App = () => (
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/admin/appointments"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminAppointments />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/clinic"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Clinic />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/providers"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Providers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/services"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Services />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/knowledge"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Knowledge />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/notifications"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Notifications />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/audit"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Audit />
+              </ProtectedRoute>
+            }
+          />
           
           {/* Staff Routes */}
           <Route
@@ -38,6 +102,14 @@ const App = () => (
             element={
               <ProtectedRoute allowedRoles={['staff']}>
                 <StaffDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/staff/appointments"
+            element={
+              <ProtectedRoute allowedRoles={['staff']}>
+                <StaffAppointments />
               </ProtectedRoute>
             }
           />

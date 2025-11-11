@@ -37,10 +37,10 @@ export const DashboardSidebar = () => {
       <aside className="fixed left-0 top-0 z-40 h-screen w-64 glass-card border-r border-white/20 hidden lg:block">
         <div className="flex h-full flex-col gap-6 p-6">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-primary to-secondary">
-              <Stethoscope className="w-6 h-6 text-white" />
+            <div className="p-2 rounded-xl bg-primary">
+              <Stethoscope className="w-6 h-6 text-primary-foreground" />
             </div>
-            <span className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            <span className="text-lg font-bold text-foreground">
               HealthCare Plus
             </span>
           </div>
@@ -54,8 +54,8 @@ export const DashboardSidebar = () => {
                   cn(
                     'flex items-center gap-3 px-4 py-3 rounded-xl transition-all hover-lift',
                     isActive
-                      ? 'bg-gradient-to-r from-primary to-secondary text-white shadow-lg'
-                      : 'text-foreground hover:bg-white/50'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-foreground hover:bg-muted'
                   )
                 }
               >

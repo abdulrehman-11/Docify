@@ -28,7 +28,7 @@ const Landing = () => {
                 AI-Powered Healthcare
               </span>
             </div>
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+            <h1 className="text-5xl md:text-7xl font-bold mb-6 text-foreground">
               Your AI-Powered
               <br />
               Clinic Receptionist
@@ -38,12 +38,12 @@ const Landing = () => {
             </p>
             <div className="flex gap-4 justify-center flex-wrap">
               <a href="tel:+92444555777">
-                <Button size="lg" className="gradient-primary text-white text-lg px-8 py-6 hover:scale-105 transition-transform">
+                <Button size="lg" className="bg-primary text-primary-foreground text-lg px-8 py-6 hover:bg-primary/90 transition-all">
                   <Phone className="w-5 h-5 mr-2" />
                   Call Now: +92-444-555-777
                 </Button>
               </a>
-              <Button size="lg" variant="outline" className="glass text-lg px-8 py-6 hover-lift">
+              <Button size="lg" variant="outline" className="text-lg px-8 py-6 hover-lift">
                 <Calendar className="w-5 h-5 mr-2" />
                 View Doctors
               </Button>
@@ -62,8 +62,8 @@ const Landing = () => {
                 className="glass-card p-6 rounded-2xl hover-lift animate-float"
                 style={{ animationDelay: item.delay }}
               >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 mx-auto">
-                  <item.icon className="w-6 h-6 text-white" />
+                <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center mb-4 mx-auto">
+                  <item.icon className="w-6 h-6 text-primary-foreground" />
                 </div>
                 <h3 className="font-semibold text-lg">{item.title}</h3>
               </div>
@@ -73,10 +73,10 @@ const Landing = () => {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-20 px-4 bg-gradient-hero">
+      <section id="how-it-works" className="py-20 px-4 bg-muted/30">
         <div className="container mx-auto">
-          <h2 className="text-4xl md:text-5xl font-bold text-center mb-16">
-            How It <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Works</span>
+          <h2 className="text-4xl md:text-5xl font-bold text-center mb-16 text-foreground">
+            How It <span className="text-primary">Works</span>
           </h2>
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {[
@@ -100,8 +100,8 @@ const Landing = () => {
               },
             ].map((item, index) => (
               <div key={index} className="glass-card p-8 rounded-2xl hover-lift text-center">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-6 mx-auto">
-                  <item.icon className="w-8 h-8 text-white" />
+                <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mb-6 mx-auto">
+                  <item.icon className="w-8 h-8 text-primary-foreground" />
                 </div>
                 <div className="text-4xl font-bold text-primary mb-4">{item.step}</div>
                 <h3 className="text-xl font-bold mb-3">{item.title}</h3>
@@ -119,7 +119,7 @@ const Landing = () => {
             <div>
               <h2 className="text-4xl md:text-5xl font-bold mb-6">
                 Welcome to{' '}
-                <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                <span className="text-primary">
                   HealthCare Plus
                 </span>
               </h2>
@@ -165,15 +165,15 @@ const Landing = () => {
       </section>
 
       {/* Contact Section */}
-      <section id="contact" className="py-20 px-4 bg-gradient-hero">
+      <section id="contact" className="py-20 px-4 bg-muted/30">
         <div className="container mx-auto max-w-4xl">
           <h2 className="text-4xl md:text-5xl font-bold text-center mb-16">
-            Get in <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Touch</span>
+            Get in <span className="text-primary">Touch</span>
           </h2>
           <div className="grid md:grid-cols-3 gap-6">
             <div className="glass-card p-6 rounded-2xl text-center hover-lift">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 mx-auto">
-                <Phone className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center mb-4 mx-auto">
+                <Phone className="w-6 h-6 text-primary-foreground" />
               </div>
               <h3 className="font-semibold mb-2">Phone</h3>
               <a href="tel:+92444555777" className="text-primary hover:underline">
@@ -181,8 +181,8 @@ const Landing = () => {
               </a>
             </div>
             <div className="glass-card p-6 rounded-2xl text-center hover-lift">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-secondary to-accent flex items-center justify-center mb-4 mx-auto">
-                <Mail className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center mb-4 mx-auto">
+                <Mail className="w-6 h-6 text-accent-foreground" />
               </div>
               <h3 className="font-semibold mb-2">Email</h3>
               <a href="mailto:info@healthcareplus.com" className="text-primary hover:underline">
@@ -190,8 +190,8 @@ const Landing = () => {
               </a>
             </div>
             <div className="glass-card p-6 rounded-2xl text-center hover-lift">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center mb-4 mx-auto">
-                <MapPin className="w-6 h-6 text-white" />
+              <div className="w-12 h-12 rounded-xl bg-success flex items-center justify-center mb-4 mx-auto">
+                <MapPin className="w-6 h-6 text-success-foreground" />
               </div>
               <h3 className="font-semibold mb-2">Address</h3>
               <p className="text-sm text-muted-foreground">
