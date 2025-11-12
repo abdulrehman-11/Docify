@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 load_dotenv(".env.local")
 load_dotenv("../agent-starter-node/.env.local")
 
+# Import database components
+from database import engine, Base
+
 HUMANLY_SYSTEM_PROMPT = (
     "Hey! You're a real-time voice assistant for The Hexaa Clinic, and honestly, you're basically just having a friendly phone conversation with folks who call in.\n\n"
     "Your main thing is helping people with appointments—booking 'em, moving 'em around, canceling 'em—and answering quick questions about the clinic. If someone needs to talk to a real person or if something sounds urgent, you'll get them connected right away.\n\n"
@@ -145,10 +148,20 @@ class Assistant(Agent):
         self.latency_tracker = latency_tracker
 
 
+async def initialize_database():
+    """Create all tables if they don't exist."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables initialized")
+
+
 async def entrypoint(ctx: agents.JobContext):
     latency_tracker = LatencyTracker()
     logger.info(
         "🚀 Initializing Medical Clinic Voice Agent with Latency Monitoring...")
+
+    # Initialize database
+    await initialize_database()
 
     # Initialize tool router and handlers
     router = ToolRouter()
@@ -159,23 +172,23 @@ async def entrypoint(ctx: agents.JobContext):
     logger.info(f"📦 Registered {len(router.list_tools())} tools: {', '.join(router.list_tools())}")
 
     # Configure ElevenLabs TTS for natural, low-latency speech
-    tts_instance = el_tts.TTS(
-        voice_id="M7UK1Bhm8FI3u8guNN9Y",
-        model="eleven_turbo_v2_5",  # Fast model for ~75-100ms latency
-        api_key=os.getenv("ELEVEN_LABS"),
-        enable_ssml_parsing=False,  # Disable for lower latency
-        chunk_length_schedule=[100, 160, 220],  # Smaller chunks for faster streaming
-        streaming_latency=2,
-    )
-
-    # logger.info("🎙️  Configuring Cartesia Sonic TTS...")
-    # tts_instance = cartesia.TTS(
-    #     model="sonic-english",
-    #     voice="156fb8d2-335b-4950-9cb3-a2d33befec77",  # Natural conversational voice
-    #     encoding="pcm_s16le",
-    #     sample_rate=24000,
+    # tts_instance = el_tts.TTS(
+    #     voice_id="M7UK1Bhm8FI3u8guNN9Y",
+    #     model="eleven_turbo_v2_5",  # Fast model for ~75-100ms latency
+    #     api_key=os.getenv("ELEVEN_LABS"),
+    #     enable_ssml_parsing=False,  # Disable for lower latency
+    #     chunk_length_schedule=[100, 160, 220],  # Smaller chunks for faster streaming
+    #     streaming_latency=2,
     # )
-    # logger.info("✅ Cartesia TTS initialized successfully")
+
+    logger.info("🎙️  Configuring Cartesia Sonic TTS...")
+    tts_instance = cartesia.TTS(
+        model="sonic-english",
+        voice="156fb8d2-335b-4950-9cb3-a2d33befec77",  # Natural conversational voice
+        encoding="pcm_s16le",
+        sample_rate=24000,
+    )
+    logger.info("✅ Cartesia TTS initialized successfully")
 
     # Configure AgentSession with optimized parameters for natural conversation
     session = AgentSession(
