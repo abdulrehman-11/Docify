@@ -84,8 +84,13 @@ class AppointmentService:
         current_time = datetime.combine(date.date(), clinic_start)
         end_time = datetime.combine(date.date(), clinic_end)
 
+        # Preserve timezone info if date has it
+        if date.tzinfo is not None:
+            current_time = current_time.replace(tzinfo=date.tzinfo)
+            end_time = end_time.replace(tzinfo=date.tzinfo)
+
         # Don't allow booking slots in the past
-        now = datetime.now(current_time.tzinfo)
+        now = datetime.now(current_time.tzinfo) if current_time.tzinfo else datetime.now()
         if current_time < now:
             current_time = now
 

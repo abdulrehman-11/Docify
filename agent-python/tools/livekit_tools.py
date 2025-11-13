@@ -10,7 +10,7 @@ def create_livekit_tools(router):
     @function_tool(
         raw_schema={
             "name": "check_availability",
-            "description": "Check available appointment slots within a time window",
+            "description": "Check available appointment slots within a time window. Returns list of slots with 'start' and 'end' times in ISO8601 format. To determine if user's requested time is available: compare their time to each slot's start time (within 15 minutes tolerance). Example: User wants '2:30 PM' (14:30), slot with start='2025-11-14T14:30:00+00:00' is a perfect match.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -53,7 +53,7 @@ def create_livekit_tools(router):
     @function_tool(
         raw_schema={
             "name": "book_appointment",
-            "description": "Book a new appointment with patient details",
+            "description": "Book a new appointment with patient details. CRITICAL: (1) Always call check_availability first and use EXACT 'start'/'end' from returned slots. (2) ALWAYS spell email back letter-by-letter to patient and get confirmation before booking - emails must be perfect to find returning patients.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -67,11 +67,11 @@ def create_livekit_tools(router):
                     },
                     "slot_start": {
                         "type": "string",
-                        "description": "Appointment start time in ISO8601 format"
+                        "description": "Appointment start time in ISO8601 format (e.g., 2025-11-14T14:00:00+00:00). MUST be copied exactly from check_availability result. Must be in the future."
                     },
                     "slot_end": {
                         "type": "string",
-                        "description": "Appointment end time in ISO8601 format"
+                        "description": "Appointment end time in ISO8601 format (e.g., 2025-11-14T14:30:00+00:00). MUST be exactly 30 minutes after slot_start. Copy exactly from check_availability result."
                     },
                     "phone": {
                         "type": "string",
