@@ -6,8 +6,17 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+<<<<<<< Updated upstream
     "email-validator>=2.3.0",
     "livekit-agents[assemblyai,deepgram,openai]~=1.2.14",
+=======
+    "cartesia>=2.0.15",
+    "elevenlabs>=2.22.0",
+    "email-validator>=2.0.0",
+    "livekit-agents[assemblyai,deepgram,openai]~=1.2.14",
+    "livekit-plugins-cartesia~=1.2.0",
+    "livekit-plugins-elevenlabs~=1.2.17",
+>>>>>>> Stashed changes
     "livekit-plugins-noise-cancellation~=0.2",
     "openai>=2.2.0",
     "pyaudio>=0.2.14",
