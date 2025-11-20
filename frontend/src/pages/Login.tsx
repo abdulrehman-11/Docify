@@ -18,7 +18,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const user = login(email, password);
+      const user = await login(email, password);
       if (user) {
         toast.success(`Welcome back, ${user.name}!`);
         navigate(user.role === 'admin' ? '/admin/dashboard' : '/staff/dashboard');

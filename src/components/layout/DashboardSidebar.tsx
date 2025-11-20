@@ -5,6 +5,7 @@ import {
   Calendar, 
   Building2, 
   Users, 
+  UserCog,
   Briefcase, 
   BookOpen, 
   Bell, 
@@ -24,6 +25,7 @@ export const DashboardSidebar = () => {
     ...(isAdmin ? [
       { icon: Building2, label: 'Clinic Info', path: '/admin/clinic' },
       { icon: Users, label: 'Providers', path: '/admin/providers' },
+      { icon: UserCog, label: 'Staff Management', path: '/admin/staff' },
       { icon: Briefcase, label: 'Services', path: '/admin/services' },
       { icon: BookOpen, label: 'Knowledge Base', path: '/admin/knowledge' },
       { icon: Bell, label: 'Notifications', path: '/admin/notifications' },

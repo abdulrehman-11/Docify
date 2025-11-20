@@ -1,73 +1,276 @@
-# Welcome to your Lovable project
+# Ether Clinic - Complete AI Clinic Calling Agent System# Ether Clinic - AI-Powered Clinic Calling Agent System
 
-## Project info
 
-**URL**: https://lovable.dev/projects/47bece89-5d4b-4a52-9bef-f37632426fe5
 
-## How can I edit this code?
+A full-stack application combining a React frontend with Python AI backend for managing clinic operations with an intelligent calling agent.A complete frontend application for managing clinic operations with an AI-powered calling agent system.
 
-There are several ways of editing your application.
 
-**Use Lovable**
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/47bece89-5d4b-4a52-9bef-f37632426fe5) and start prompting.
+## 📁 Project Structure## 🏥 Project Overview
 
-Changes made via Lovable will be committed automatically to this repo.
 
-**Use your preferred IDE**
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+```**Ether Clinic** is a comprehensive clinic management system that enables healthcare providers to:
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+ether-clinic/- Manage appointments with a visual calendar interface
 
-Follow these steps:
+├── frontend/          # React + TypeScript frontend application- Control staff accounts with custom permissions
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+│   ├── src/          # Source code for the web interface- Maintain provider schedules and availability
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+│   ├── public/       # Static assets- Configure clinic information and operating hours
 
-# Step 3: Install the necessary dependencies.
-npm i
+│   └── package.json  # Frontend dependencies- Define services and their durations
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+│- Build an AI knowledge base for common patient questions
+
+└── backend/          # Python AI agent backend
+
+    ├── agent-python/ # AI calling agent implementation## 🚀 Features
+
+    └── README.md     # Backend documentation
+
+```### Admin Dashboard
+
+- **Appointment Management**: Full calendar view with appointment creation, editing, and status tracking
+
+## 🚀 Quick Start- **Staff Management**: Create and manage staff accounts with granular permissions
+
+- **Provider Management**: Manage doctors with schedules, bios, and contact information
+
+### Frontend Setup- **Services Configuration**: Define clinic services with durations
+
+- **Clinic Information**: Edit contact details and operating hours
+
+```bash- **Knowledge Base**: Configure AI responses for common questions
+
+cd frontend- **Audit Logging**: Track all system changes and actions
+
+npm install
+
+npm run dev### Staff Dashboard
+
+```- **Limited Appointment Access**: View and manage appointments for assigned doctors only
+
+- **Permission-Based Actions**: Custom permissions control what staff can do
+
+The frontend will be available at `http://localhost:8080`
+
+## 🛠️ Tech Stack
+
+**Default Admin Login:**
+
+- Email: `admin@clinic.com`- **Frontend Framework**: React 18.3.1 with TypeScript
+
+- Password: `Admin123`- **Build Tool**: Vite 5.4.19
+
+- **Styling**: Tailwind CSS with custom glassmorphism effects
+
+### Backend Setup- **UI Components**: Radix UI + shadcn/ui
+
+- **Routing**: React Router v6
+
+```bash- **State Management**: React Hooks + localStorage
+
+cd backend/agent-python- **Date Handling**: date-fns
+
+# Follow backend README.md for setup instructions- **Icons**: Lucide React
+
+```- **Notifications**: Sonner
+
+
+
+## 🏥 Features## 📦 Installation
+
+
+
+### Frontend (React + TypeScript)```sh
+
+- **Admin Dashboard** - Complete clinic management interface# Clone the repository
+
+- **Appointment Management** - Visual calendar with booking systemgit clone https://github.com/KhurramTheHexaa-tech/ether-clinic.git
+
+- **Staff Management** - User accounts with custom permissions
+
+- **Provider Management** - Doctor profiles and schedules# Navigate to the project directory
+
+- **Services Configuration** - Define clinic services and durationscd ether-clinic
+
+- **Clinic Settings** - Operating hours and contact information
+
+- **Knowledge Base Editor** - Configure AI responses for common questions# Install dependencies
+
+- **Audit Logging** - Track all system changesnpm install
+
+
+
+### Backend (Python AI Agent)# Start the development server
+
+- **AI Calling Agent** - Intelligent phone interaction systemnpm run dev
+
+- **Natural Language Processing** - Understand patient requests```
+
+- **Appointment Booking** - Automated scheduling via phone
+
+- **Knowledge Base Integration** - Answer common questions## 🔐 Default Login Credentials
+
+- **Voice Integration** - Text-to-speech and speech-to-text
+
+**Admin Account:**
+
+## 🛠️ Tech Stack- Email: `admin@clinic.com`
+
+- Password: `Admin123`
+
+### Frontend
+
+- **Framework:** React 18.3.1 with TypeScript## 📁 Project Structure
+
+- **Build Tool:** Vite 5.4.19
+
+- **Styling:** Tailwind CSS with glassmorphism effects```
+
+- **UI Components:** Radix UI + shadcn/uiether-clinic/
+
+- **Routing:** React Router v6├── src/
+
+- **State:** React Hooks + localStorage│   ├── components/         # Reusable UI components
+
+- **Icons:** Lucide React│   │   ├── layout/        # Layout components (Navbar, Sidebar, etc.)
+
+│   │   └── ui/            # shadcn/ui components
+
+### Backend│   ├── hooks/             # Custom React hooks
+
+- **Language:** Python│   ├── lib/               # Utility functions and storage
+
+- **AI/ML:** OpenAI, LangChain, ChromaDB│   │   ├── auth.ts       # Authentication system
+
+- **Voice:** Twilio, ElevenLabs│   │   ├── storage.ts    # localStorage management
+
+- **Framework:** FastAPI (API endpoints)│   │   └── mockData.ts   # Type definitions
+
+│   ├── pages/             # Page components
+
+## 📖 Documentation│   │   ├── admin/        # Admin-only pages
+
+│   │   └── staff/        # Staff pages
+
+- [Frontend README](./frontend/README.md) - Detailed frontend documentation│   └── App.tsx            # Main application component
+
+- [Backend README](./backend/README.md) - Backend setup and API docs├── public/                # Static assets
+
+└── index.html            # HTML entry point
+
+## 🔐 Environment Variables```
+
+
+
+### Frontend## 🎨 Key Features Implemented
+
+No environment variables required - uses localStorage for data persistence.
+
+### ✅ Secure Authentication
+
+### Backend- Role-based access control (Admin/Staff)
+
+See `backend/agent-python` for required API keys and configuration.- Session management with localStorage
+
+- Protected routes
+
+## 🎯 Key Workflows
+
+### ✅ Appointment System
+
+1. **Patient Calls Clinic** → AI Agent answers → Books appointment → Syncs with frontend- Interactive calendar with month navigation
+
+2. **Staff Logs In** → Views calendar → Manages appointments → Updates knowledge base- Create, edit, cancel, and complete appointments
+
+3. **Admin Manages** → Creates staff accounts → Configures services → Reviews audit logs- Filter by doctor
+
+- Status badges and tracking
+
+## 📦 Deployment
+
+### ✅ Staff Account Management
+
+### Frontend- Custom permissions system
+
+```bash- Assign specific doctors to staff members
+
+cd frontend- Create/edit/delete staff accounts
+
+npm run build
+
+# Deploy dist/ folder to hosting service (Vercel, Netlify, etc.)### ✅ Provider Management
+
+```- Doctor profiles with bios and specializations
+
+- Weekly schedule editor
+
+### Backend- Contact information management
+
+```bash
+
+cd backend/agent-python### ✅ Knowledge Base Editor
+
+# Follow backend deployment instructions- Category-based Q&A organization
+
+```- Search and filter functionality
+
+- Define exact AI responses
+
+## 👥 User Roles
+
+### ✅ Clinic Configuration
+
+- **Admin** - Full access to all features- Operating hours for all 7 days
+
+- **Staff** - Limited access based on assigned permissions- Contact information (address, phone, email)
+
+- Service catalog with durations
+
+## 🔄 Data Flow
+
+## 🔧 Available Scripts
+
 ```
 
-**Edit a file directly in GitHub**
+Phone Call → AI Agent (Backend) → API → Frontend Dashboard → Staff Action → Database Update → AI Agent Knowledge Base```sh
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```npm run dev          # Start development server
 
-**Use GitHub Codespaces**
+npm run build        # Build for production
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🤝 Contributingnpm run build:dev    # Build in development mode
 
-## What technologies are used for this project?
+npm run preview      # Preview production build
 
-This project is built with:
+This is a private project by **KhurramTheHexaa-tech**.npm run lint         # Run ESLint
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```
 
-## How can I deploy this project?
+## 📄 License
 
-Simply open [Lovable](https://lovable.dev/projects/47bece89-5d4b-4a52-9bef-f37632426fe5) and click on Share -> Publish.
+## 📄 License
 
-## Can I connect a custom domain to my Lovable project?
+Private and Proprietary
 
-Yes, you can!
+This project is private and proprietary.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## 👤 Author
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 👤 Author
+
+**KhurramTheHexaa-tech**
+
+**KhurramTheHexaa-tech**
+
+---
+
+---
+
+Built with ❤️ for modern healthcare management
+
+Built with ❤️ for modern healthcare management
+

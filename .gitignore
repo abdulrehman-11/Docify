@@ -1,24 +1,33 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Root level gitignore
 
-node_modules
-dist
-dist-ssr
-*.local
+# Frontend build artifacts
+frontend/dist
+frontend/dist-ssr
+frontend/node_modules
+frontend/.vite
+frontend/*.local
 
-# Editor directories and files
+# Backend
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+backend/venv/
+backend/.venv/
+backend/agent-python/__pycache__/
+backend/agent-python/*.pyc
+backend/agent-python/.env
+backend/agent-python/venv/
+backend/agent-python/.venv/
+
+# IDEs
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db

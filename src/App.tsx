@@ -11,6 +11,7 @@ import StaffDashboard from "./pages/staff/StaffDashboard";
 import AdminAppointments from "./pages/admin/Appointments";
 import Clinic from "./pages/admin/Clinic";
 import Providers from "./pages/admin/Providers";
+import Staff from "./pages/admin/Staff";
 import Services from "./pages/admin/Services";
 import Knowledge from "./pages/admin/Knowledge";
 import Notifications from "./pages/admin/Notifications";
@@ -60,6 +61,14 @@ const App = () => (
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <Providers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/staff"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Staff />
               </ProtectedRoute>
             }
           />
