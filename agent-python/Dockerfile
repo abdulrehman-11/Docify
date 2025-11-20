@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8000
 
 # Run Alembic migrations before starting the agent
-CMD ["sh", "-c", "alembic upgrade head && python agent.py start"]
+CMD alembic upgrade head && python agent.py start
