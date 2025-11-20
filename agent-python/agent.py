@@ -246,7 +246,7 @@ async def entrypoint(ctx: JobContext):
     # ===== USE ELEVENLABS TTS =====
     logger.info("🎙️  Configuring ElevenLabs TTS...")
     tts_instance = el_tts.TTS(
-        voice_id="3gsg3cxXyFLcGIfNbM6C", 
+        voice_id="pzxut4zZz4GImZNlqQ3H", 
         model="eleven_turbo_v2_5",
         api_key=os.getenv("ELEVEN_LABS"),
         enable_ssml_parsing=False,  

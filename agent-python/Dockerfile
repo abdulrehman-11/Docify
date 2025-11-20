@@ -10,8 +10,8 @@ COPY . .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose the port your backend will run on
+# Expose the port your backend will run on (not needed for LiveKit agent, but kept for compatibility)
 EXPOSE 8000
 
-# Run Alembic migrations before starting the backend
-CMD ["sh", "-c", "alembic upgrade head && python agent.py start"]
+# Run Alembic migrations before starting the agent
+CMD ["sh", "-c", "alembic upgrade head && python agent.py"]
