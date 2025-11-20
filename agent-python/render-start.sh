@@ -2,4 +2,4 @@
 set -e
 
 echo "🚀 Starting Hexaa Clinic Voice Agent..."
-python agent.py
+python agent.py start
