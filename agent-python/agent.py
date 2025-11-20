@@ -245,10 +245,24 @@ async def entrypoint(ctx: JobContext):
 
     # ===== USE ELEVENLABS TTS =====
     logger.info("🎙️  Configuring ElevenLabs TTS...")
+    
+    # Debug: Check if API key is present (masked for security)
+    eleven_labs_key = os.getenv("ELEVEN_LABS")
+    if not eleven_labs_key:
+        logger.error("❌ ELEVEN_LABS environment variable is NOT SET!")
+        logger.error("   This will cause TTS to fail. Please set ELEVEN_LABS in Render environment.")
+    else:
+        masked_key = eleven_labs_key[:4] + "****" + eleven_labs_key[-4:] if len(eleven_labs_key) > 8 else "****"
+        logger.info(f"✅ ELEVEN_LABS key found: {masked_key}")
+    
+    voice_id = "pzxut4zZz4GImZNlqQ3H"
+    logger.info(f"   Using Voice ID: {voice_id}")
+    logger.info(f"   Model: eleven_turbo_v2_5")
+    
     tts_instance = el_tts.TTS(
-        voice_id="pzxut4zZz4GImZNlqQ3H", 
+        voice_id=voice_id, 
         model="eleven_turbo_v2_5",
-        api_key=os.getenv("ELEVEN_LABS"),
+        api_key=eleven_labs_key,
         enable_ssml_parsing=False,  
         chunk_length_schedule=[100, 160, 220], 
         streaming_latency=2,
@@ -355,6 +369,30 @@ if __name__ == "__main__":
         logger.info("🚀 Production Mode: VAD turn detection (GPU-free)")
     else:
         logger.info("💻 Development Mode: Enhanced turn detection")
+    logger.info("="*70)
+    
+    # Environment variable checks
+    logger.info("🔍 Environment Variable Check:")
+    env_vars = {
+        "DATABASE_URL": os.getenv("DATABASE_URL"),
+        "LIVEKIT_URL": os.getenv("LIVEKIT_URL"),
+        "LIVEKIT_API_KEY": os.getenv("LIVEKIT_API_KEY"),
+        "LIVEKIT_API_SECRET": os.getenv("LIVEKIT_API_SECRET"),
+        "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+        "ELEVEN_LABS": os.getenv("ELEVEN_LABS"),
+        "DEEPGRAM_API_KEY": os.getenv("DEEPGRAM_API_KEY"),
+    }
+    
+    for key, value in env_vars.items():
+        if value:
+            if "KEY" in key or "SECRET" in key or "LABS" in key:
+                masked = value[:4] + "****" + value[-4:] if len(value) > 8 else "****"
+                logger.info(f"   ✅ {key}: {masked}")
+            else:
+                logger.info(f"   ✅ {key}: {value[:30]}..." if len(value) > 30 else f"   ✅ {key}: {value}")
+        else:
+            logger.warning(f"   ❌ {key}: NOT SET")
+    
     logger.info("="*70)
     
     worker_opts = WorkerOptions(
