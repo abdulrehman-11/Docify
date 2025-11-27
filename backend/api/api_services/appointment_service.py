@@ -1,6 +1,7 @@
 """
 Extended Appointment Service for FastAPI with full CRUD operations.
 Imports and extends the existing AppointmentService from agent-python.
+Includes Google Calendar integration.
 """
 import sys
 from pathlib import Path
@@ -17,6 +18,14 @@ from models.patient import Patient
 from datetime import datetime, date, time, timedelta
 from typing import Optional
 import logging
+
+# Import Google Calendar service
+try:
+    from services.google_calendar_service import get_calendar_service
+    CALENDAR_AVAILABLE = True
+except ImportError:
+    CALENDAR_AVAILABLE = False
+    get_calendar_service = None
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +132,7 @@ class AppointmentAPIService:
         reason: str
     ) -> Appointment:
         """
-        Create a new appointment.
+        Create a new appointment with Google Calendar integration.
         
         Raises:
             ValueError: If patient not found or slot not available
@@ -160,6 +169,28 @@ class AppointmentAPIService:
         )
         self.session.add(appointment)
         await self.session.flush()
+        
+        # Create Google Calendar event
+        if CALENDAR_AVAILABLE:
+            try:
+                calendar_service = get_calendar_service()
+                event_id = calendar_service.create_event(
+                    patient_name=patient.name,
+                    patient_email=patient.email,
+                    patient_phone=patient.phone,
+                    reason=reason,
+                    start_time=start_time,
+                    end_time=end_time,
+                    appointment_id=appointment.id
+                )
+                if event_id:
+                    appointment.google_calendar_event_id = event_id
+                    await self.session.flush()
+                    logger.info(f"Created calendar event {event_id} for appointment {appointment.id}")
+            except Exception as e:
+                logger.error(f"Failed to create calendar event: {e}")
+                # Continue without calendar - appointment is still valid
+        
         logger.info(f"Created appointment ID {appointment.id}")
         return appointment
 
@@ -173,7 +204,7 @@ class AppointmentAPIService:
         cancellation_reason: Optional[str] = None
     ) -> Appointment:
         """
-        Update appointment.
+        Update appointment with Google Calendar sync.
         
         Raises:
             ValueError: If appointment not found or time conflict
@@ -185,8 +216,9 @@ class AppointmentAPIService:
         # If changing time, check for conflicts
         new_start = start_time if start_time else appointment.start_time
         new_end = end_time if end_time else appointment.end_time
+        time_changed = start_time or end_time
 
-        if start_time or end_time:
+        if time_changed:
             conflict_stmt = select(Appointment).where(
                 and_(
                     Appointment.id != appointment_id,
@@ -213,6 +245,31 @@ class AppointmentAPIService:
             appointment.cancellation_reason = cancellation_reason
 
         await self.session.flush()
+        
+        # Update Google Calendar event if time changed
+        if time_changed and appointment.google_calendar_event_id and CALENDAR_AVAILABLE:
+            try:
+                # Get patient info
+                patient_stmt = select(Patient).where(Patient.id == appointment.patient_id)
+                patient_result = await self.session.execute(patient_stmt)
+                patient = patient_result.scalar_one_or_none()
+                
+                if patient:
+                    calendar_service = get_calendar_service()
+                    calendar_service.update_event(
+                        event_id=appointment.google_calendar_event_id,
+                        patient_name=patient.name,
+                        patient_email=patient.email,
+                        patient_phone=patient.phone,
+                        reason=appointment.reason,
+                        start_time=new_start,
+                        end_time=new_end,
+                        appointment_id=appointment_id
+                    )
+                    logger.info(f"Updated calendar event for appointment {appointment_id}")
+            except Exception as e:
+                logger.error(f"Failed to update calendar event: {e}")
+        
         logger.info(f"Updated appointment ID {appointment_id}")
         return appointment
 
@@ -221,7 +278,7 @@ class AppointmentAPIService:
         appointment_id: int,
         cancellation_reason: Optional[str] = None
     ) -> Appointment:
-        """Cancel an appointment."""
+        """Cancel an appointment and delete from Google Calendar."""
         appointment = await self.get_appointment_by_id(appointment_id)
         if not appointment:
             raise ValueError(f"Appointment ID {appointment_id} not found")
@@ -229,15 +286,28 @@ class AppointmentAPIService:
         if appointment.status == AppointmentStatus.CANCELLED:
             raise ValueError("Appointment is already cancelled")
 
+        # Store calendar event ID before cancelling
+        calendar_event_id = appointment.google_calendar_event_id
+
         appointment.status = AppointmentStatus.CANCELLED
         appointment.cancellation_reason = cancellation_reason
         await self.session.flush()
+        
+        # Delete from Google Calendar
+        if calendar_event_id and CALENDAR_AVAILABLE:
+            try:
+                calendar_service = get_calendar_service()
+                calendar_service.delete_event(calendar_event_id)
+                logger.info(f"Deleted calendar event {calendar_event_id}")
+            except Exception as e:
+                logger.error(f"Failed to delete calendar event: {e}")
+        
         logger.info(f"Cancelled appointment ID {appointment_id}")
         return appointment
 
     async def delete_appointment(self, appointment_id: int) -> bool:
         """
-        Delete an appointment (hard delete).
+        Delete an appointment (hard delete) and remove from Google Calendar.
         
         Returns:
             True if deleted, False if not found
@@ -246,8 +316,21 @@ class AppointmentAPIService:
         if not appointment:
             return False
 
+        # Store calendar event ID before deleting
+        calendar_event_id = appointment.google_calendar_event_id
+
         await self.session.delete(appointment)
         await self.session.flush()
+        
+        # Delete from Google Calendar
+        if calendar_event_id and CALENDAR_AVAILABLE:
+            try:
+                calendar_service = get_calendar_service()
+                calendar_service.delete_event(calendar_event_id)
+                logger.info(f"Deleted calendar event {calendar_event_id}")
+            except Exception as e:
+                logger.error(f"Failed to delete calendar event: {e}")
+        
         logger.info(f"Deleted appointment ID {appointment_id}")
         return True
 

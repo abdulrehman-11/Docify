@@ -20,6 +20,9 @@ class Appointment(Base, TimestampMixin):
     reason = Column(Text, nullable=False)
     status = Column(SQLEnum(AppointmentStatus), nullable=False, default=AppointmentStatus.CONFIRMED, index=True)
     cancellation_reason = Column(Text, nullable=True)
+    
+    # Google Calendar Integration
+    google_calendar_event_id = Column(String(255), nullable=True, index=True)
 
     # Relationship
     patient = relationship("Patient", backref="appointments")

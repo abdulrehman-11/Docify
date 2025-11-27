@@ -15,6 +15,7 @@ from .router import ToolRouter
 from datetime import datetime, timedelta
 from services.appointment_service import AppointmentService
 from services.patient_service import PatientService
+from services.google_calendar_service import get_calendar_service
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ async def check_availability(i: CheckAvailabilityInput) -> CheckAvailabilityOutp
 
 
 async def book_appointment(i: BookAppointmentInput) -> BookAppointmentOutput:
-  """Book appointment with conflict detection."""
+  """Book appointment with conflict detection and Google Calendar integration."""
   logger.info("Executing book_appointment handler")
   logger.info(f"Booking details - Name: {i.name}, Email: {i.email}, Slot: {i.slot_start[11:16]}-{i.slot_end[11:16]}")
 
@@ -73,8 +74,28 @@ async def book_appointment(i: BookAppointmentInput) -> BookAppointmentOutput:
         reason=i.reason
       )
 
-      # Commit transaction
+      # Commit transaction to get appointment ID
       await session.commit()
+
+      # Create Google Calendar event (after DB commit to ensure consistency)
+      calendar_service = get_calendar_service()
+      event_id = calendar_service.create_event(
+        patient_name=patient.name,
+        patient_email=patient.email,
+        patient_phone=patient.phone,
+        reason=i.reason,
+        start_time=start_time,
+        end_time=end_time,
+        appointment_id=appointment.id
+      )
+
+      # Update appointment with calendar event ID if created
+      if event_id:
+        appointment.google_calendar_event_id = event_id
+        await session.commit()
+        logger.info(f"Linked appointment {appointment.id} to calendar event {event_id}")
+      else:
+        logger.warning(f"Calendar event not created for appointment {appointment.id} - calendar may be disabled")
 
       confirmation_id = f"cnf_{appointment.id}_{int(datetime.now().timestamp())}"
       logger.info(f"Successfully booked appointment {appointment.id}")
@@ -90,7 +111,7 @@ async def book_appointment(i: BookAppointmentInput) -> BookAppointmentOutput:
 
 
 async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutput:
-  """Cancel appointment by patient name and time."""
+  """Cancel appointment by patient name and time, and remove from Google Calendar."""
   logger.info("Executing cancel_appointment handler")
   async with _session_factory() as session:
     appointment_service = AppointmentService(session)
@@ -102,6 +123,9 @@ async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutp
     if not appointment:
       raise ValueError(f"No appointment found for {i.name} at {i.slot_start}")
 
+    # Store calendar event ID before canceling
+    calendar_event_id = appointment.google_calendar_event_id
+
     # Cancel it
     await appointment_service.cancel_appointment(
       appointment_id=appointment.id,
@@ -109,12 +133,23 @@ async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutp
     )
     await session.commit()
 
+    # Delete from Google Calendar
+    if calendar_event_id:
+      calendar_service = get_calendar_service()
+      deleted = calendar_service.delete_event(calendar_event_id)
+      if deleted:
+        logger.info(f"Deleted calendar event {calendar_event_id} for cancelled appointment {appointment.id}")
+      else:
+        logger.warning(f"Failed to delete calendar event {calendar_event_id}")
+    else:
+      logger.info(f"No calendar event linked to appointment {appointment.id}")
+
     logger.info(f"Cancelled appointment {appointment.id}")
     return CancelAppointmentOutput(status="cancelled")
 
 
 async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleAppointmentOutput:
-  """Reschedule appointment to new time."""
+  """Reschedule appointment to new time and update Google Calendar."""
   logger.info("Executing reschedule_appointment handler")
   async with _session_factory() as session:
     appointment_service = AppointmentService(session)
@@ -126,6 +161,12 @@ async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleApp
     if not appointment:
       raise ValueError(f"No appointment found for {i.name} at {i.current_slot_start}")
 
+    # Store old calendar event ID
+    old_calendar_event_id = appointment.google_calendar_event_id
+
+    # Get patient info for calendar event
+    patient = appointment.patient
+
     # Reschedule atomically
     new_start = datetime.fromisoformat(i.new_slot_start.replace("Z", "+00:00"))
     new_end = datetime.fromisoformat(i.new_slot_end.replace("Z", "+00:00"))
@@ -135,6 +176,58 @@ async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleApp
       new_end_time=new_end
     )
     await session.commit()
+
+    # Handle Google Calendar update
+    calendar_service = get_calendar_service()
+    
+    if old_calendar_event_id:
+      # Update the existing calendar event with new times
+      updated = calendar_service.update_event(
+        event_id=old_calendar_event_id,
+        patient_name=patient.name,
+        patient_email=patient.email,
+        patient_phone=patient.phone,
+        reason=new_appointment.reason,
+        start_time=new_start,
+        end_time=new_end,
+        appointment_id=new_appointment.id
+      )
+      
+      if updated:
+        # Transfer the calendar event ID to new appointment
+        new_appointment.google_calendar_event_id = old_calendar_event_id
+        await session.commit()
+        logger.info(f"Updated calendar event {old_calendar_event_id} for rescheduled appointment")
+      else:
+        # Create a new event if update failed
+        logger.warning(f"Failed to update calendar event, creating new one")
+        new_event_id = calendar_service.create_event(
+          patient_name=patient.name,
+          patient_email=patient.email,
+          patient_phone=patient.phone,
+          reason=new_appointment.reason,
+          start_time=new_start,
+          end_time=new_end,
+          appointment_id=new_appointment.id
+        )
+        if new_event_id:
+          new_appointment.google_calendar_event_id = new_event_id
+          await session.commit()
+    else:
+      # No existing calendar event, create new one
+      new_event_id = calendar_service.create_event(
+        patient_name=patient.name,
+        patient_email=patient.email,
+        patient_phone=patient.phone,
+        reason=new_appointment.reason,
+        start_time=new_start,
+        end_time=new_end,
+        appointment_id=new_appointment.id
+      )
+      if new_event_id:
+        new_appointment.google_calendar_event_id = new_event_id
+        await session.commit()
+        logger.info(f"Created new calendar event {new_event_id} for rescheduled appointment")
 
     new_confirmation_id = f"cnf_{new_appointment.id}_{int(datetime.now().timestamp())}"
     logger.info(f"Rescheduled appointment {appointment.id} to {new_appointment.id}")

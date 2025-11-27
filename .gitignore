@@ -19,6 +19,10 @@ backend/agent-python/.env
 backend/agent-python/venv/
 backend/agent-python/.venv/
 
+# Google Service Account (secrets)
+**/google_service_account.json
+google_service_account.json
+
 # IDEs
 .vscode/*
 !.vscode/extensions.json

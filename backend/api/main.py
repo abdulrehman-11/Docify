@@ -24,6 +24,7 @@ from routes.patients import router as patients_router
 from routes.appointments import router as appointments_router
 from routes.clinic import router as clinic_router
 from routes.staff import router as staff_router
+from api_services.calendar_sync_service import calendar_router
 
 # Configure logging
 logging.basicConfig(
@@ -69,6 +70,7 @@ app.include_router(patients_router)
 app.include_router(appointments_router)
 app.include_router(clinic_router)
 app.include_router(staff_router)
+app.include_router(calendar_router)
 
 
 @app.get("/")
@@ -89,6 +91,26 @@ async def health_check():
         "status": "healthy",
         "service": "ether-clinic-api"
     }
+
+
+@app.get("/calendar/test")
+async def test_calendar_connection():
+    """Test Google Calendar connection and return status."""
+    try:
+        from services.google_calendar_service import get_calendar_service
+        calendar_service = get_calendar_service()
+        result = calendar_service.test_connection()
+        return result
+    except ImportError:
+        return {
+            "success": False,
+            "message": "Google Calendar service not available - dependencies may be missing"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Error testing calendar: {str(e)}"
+        }
 
 
 @app.exception_handler(Exception)
