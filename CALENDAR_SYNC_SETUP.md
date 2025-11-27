@@ -49,6 +49,36 @@ Copy-paste the entire content of your Google Service Account JSON file (the one 
 
 **Important:** Paste the ENTIRE content of your service account JSON file as one continuous string.
 
+## Auto-Sync Feature (NEW!)
+
+The API now includes **automatic background synchronization** that runs every 5 minutes by default. This means:
+
+- ✅ Changes made in Google Calendar are **automatically** synced to the database
+- ✅ No need to call `/calendar/sync` manually
+- ✅ Starts automatically when the API server starts
+
+### Configuration (Optional)
+
+Add these environment variables in Render to customize:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTO_SYNC_ENABLED` | `true` | Set to `false` to disable auto-sync |
+| `AUTO_SYNC_INTERVAL` | `300` | Sync interval in seconds (300 = 5 minutes) |
+
+### Auto-Sync Endpoints
+
+```bash
+# Check auto-sync status
+GET https://docify-839r.onrender.com/calendar/auto-sync/status
+
+# Manually start auto-sync (if stopped)
+POST https://docify-839r.onrender.com/calendar/auto-sync/start
+
+# Stop auto-sync
+POST https://docify-839r.onrender.com/calendar/auto-sync/stop
+```
+
 ## API Endpoints
 
 After deployment, these calendar sync endpoints are available:
@@ -57,7 +87,21 @@ After deployment, these calendar sync endpoints are available:
 ```bash
 GET https://docify-839r.onrender.com/calendar/status
 ```
-Should return: `{"status": "available", "calendar_id": "abdul.dev010@gmail.com", "timezone": "Asia/Karachi"}`
+Should return:
+```json
+{
+  "status": "available",
+  "calendar_id": "abdul.dev010@gmail.com",
+  "timezone": "Asia/Karachi",
+  "auto_sync": {
+    "enabled": true,
+    "running": true,
+    "interval_seconds": 300,
+    "last_sync_time": "2025-11-27T10:00:00Z",
+    "last_sync_result": {"updated": 0, "cancelled": 0}
+  }
+}
+```
 
 ### Sync DB → Calendar (Create missing calendar events)
 ```bash
@@ -105,9 +149,10 @@ Lists all upcoming events in Google Calendar.
 ### When Cancelling Appointments (Automatic)
 - Frontend/Voice Agent cancels → Calendar event deleted automatically
 
-### Syncing Calendar Changes to DB (Manual or Webhook)
-- Call `POST /calendar/sync` periodically, or
-- Set up webhook for real-time updates: `POST /calendar/setup-watch`
+### Syncing Calendar Changes to DB (NOW AUTOMATIC!)
+- **Auto-sync runs every 5 minutes** - no action needed!
+- Or call `POST /calendar/sync` for immediate sync
+- Or set up webhook for real-time updates: `POST /calendar/setup-watch`
 
 ## Setting Up Real-Time Webhook (Optional)
 

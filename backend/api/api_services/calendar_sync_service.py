@@ -6,9 +6,11 @@ Features:
 - Sync changes from Calendar to DB (when events are modified in Calendar)
 - Webhook endpoint for real-time Calendar updates (requires public HTTPS)
 - Polling-based sync as fallback for development
+- AUTO-SYNC: Background task that periodically syncs calendar to DB
 """
 import os
 import sys
+import asyncio
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List, Any
@@ -33,6 +35,16 @@ except ImportError:
     CLINIC_TIMEZONE = "Asia/Karachi"
 
 logger = logging.getLogger(__name__)
+
+# ============== AUTO-SYNC CONFIGURATION ==============
+AUTO_SYNC_ENABLED = os.getenv("AUTO_SYNC_ENABLED", "true").lower() == "true"
+AUTO_SYNC_INTERVAL_SECONDS = int(os.getenv("AUTO_SYNC_INTERVAL", "300"))  # Default: 5 minutes
+
+# Global state for auto-sync
+_auto_sync_task: Optional[asyncio.Task] = None
+_auto_sync_running: bool = False
+_last_sync_time: Optional[str] = None
+_last_sync_result: Optional[Dict] = None
 
 
 class CalendarSyncService:
@@ -351,6 +363,93 @@ class CalendarSyncService:
             return {"error": str(e)}
 
 
+# ============== AUTO-SYNC FUNCTIONS ==============
+
+async def _run_auto_sync():
+    """Background task that periodically syncs calendar to database."""
+    global _auto_sync_running, _last_sync_time, _last_sync_result
+    
+    # Import here to avoid circular imports
+    from api_database import AsyncSessionLocal
+    
+    logger.info(f"[Auto-Sync] Started with interval of {AUTO_SYNC_INTERVAL_SECONDS} seconds")
+    
+    while _auto_sync_running:
+        try:
+            logger.info(f"[Auto-Sync] Running sync at {datetime.now()}")
+            
+            async with AsyncSessionLocal() as session:
+                service = CalendarSyncService(session)
+                result = await service.sync_calendar_to_db()
+                
+                _last_sync_time = datetime.now(timezone.utc).isoformat()
+                _last_sync_result = result
+                
+                if "error" in result:
+                    logger.warning(f"[Auto-Sync] Sync completed with error: {result['error']}")
+                else:
+                    logger.info(f"[Auto-Sync] Sync completed: updated={result.get('updated', 0)}, cancelled={result.get('cancelled', 0)}")
+                    
+        except Exception as e:
+            logger.error(f"[Auto-Sync] Error during sync: {e}")
+            _last_sync_result = {"error": str(e)}
+        
+        # Wait for the next sync interval
+        await asyncio.sleep(AUTO_SYNC_INTERVAL_SECONDS)
+    
+    logger.info("[Auto-Sync] Stopped")
+
+
+async def start_auto_sync():
+    """Start the auto-sync background task."""
+    global _auto_sync_task, _auto_sync_running
+    
+    if not CALENDAR_AVAILABLE:
+        logger.warning("[Auto-Sync] Cannot start - calendar service not available")
+        return False
+    
+    if not AUTO_SYNC_ENABLED:
+        logger.info("[Auto-Sync] Disabled via AUTO_SYNC_ENABLED environment variable")
+        return False
+    
+    if _auto_sync_running:
+        logger.info("[Auto-Sync] Already running")
+        return True
+    
+    _auto_sync_running = True
+    _auto_sync_task = asyncio.create_task(_run_auto_sync())
+    logger.info(f"[Auto-Sync] Task created with {AUTO_SYNC_INTERVAL_SECONDS}s interval")
+    return True
+
+
+async def stop_auto_sync():
+    """Stop the auto-sync background task."""
+    global _auto_sync_task, _auto_sync_running
+    
+    _auto_sync_running = False
+    
+    if _auto_sync_task:
+        _auto_sync_task.cancel()
+        try:
+            await _auto_sync_task
+        except asyncio.CancelledError:
+            pass
+        _auto_sync_task = None
+    
+    logger.info("[Auto-Sync] Stopped")
+
+
+def get_auto_sync_status() -> Dict[str, Any]:
+    """Get current auto-sync status."""
+    return {
+        "enabled": AUTO_SYNC_ENABLED,
+        "running": _auto_sync_running,
+        "interval_seconds": AUTO_SYNC_INTERVAL_SECONDS,
+        "last_sync_time": _last_sync_time,
+        "last_sync_result": _last_sync_result
+    }
+
+
 # Route handlers for calendar sync
 from fastapi import APIRouter, Depends, Request, HTTPException, Header, BackgroundTasks
 from api_database import get_db
@@ -424,22 +523,54 @@ async def setup_calendar_watch(
 
 @calendar_router.get("/status")
 async def get_calendar_status():
-    """Check calendar integration status."""
+    """Check calendar integration status including auto-sync."""
     if not CALENDAR_AVAILABLE:
-        return {"status": "unavailable", "reason": "Calendar service not imported"}
+        return {
+            "status": "unavailable", 
+            "reason": "Calendar service not imported",
+            "auto_sync": get_auto_sync_status()
+        }
     
     calendar_service = get_calendar_service()
     if not calendar_service._initialized:
         calendar_service.initialize()
     
     if not calendar_service._initialized or not calendar_service.service:
-        return {"status": "unavailable", "reason": "Calendar service not initialized"}
+        return {
+            "status": "unavailable", 
+            "reason": "Calendar service not initialized",
+            "auto_sync": get_auto_sync_status()
+        }
     
     return {
         "status": "available",
         "calendar_id": calendar_service.calendar_id,
-        "timezone": CLINIC_TIMEZONE
+        "timezone": CLINIC_TIMEZONE,
+        "auto_sync": get_auto_sync_status()
     }
+
+
+@calendar_router.get("/auto-sync/status")
+async def get_auto_sync_status_endpoint():
+    """Get auto-sync status."""
+    return get_auto_sync_status()
+
+
+@calendar_router.post("/auto-sync/start")
+async def start_auto_sync_endpoint():
+    """Manually start auto-sync if it was stopped."""
+    success = await start_auto_sync()
+    if success:
+        return {"message": "Auto-sync started", "status": get_auto_sync_status()}
+    else:
+        return {"message": "Failed to start auto-sync", "status": get_auto_sync_status()}
+
+
+@calendar_router.post("/auto-sync/stop")
+async def stop_auto_sync_endpoint():
+    """Stop auto-sync."""
+    await stop_auto_sync()
+    return {"message": "Auto-sync stopped", "status": get_auto_sync_status()}
 
 
 @calendar_router.post("/sync-to-calendar")

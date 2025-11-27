@@ -2,6 +2,7 @@
 FastAPI REST API Server for Ether Clinic Staff Dashboard.
 Connects to the same Neon PostgreSQL database as the voice agent.
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -24,7 +25,7 @@ from routes.patients import router as patients_router
 from routes.appointments import router as appointments_router
 from routes.clinic import router as clinic_router
 from routes.staff import router as staff_router
-from api_services.calendar_sync_service import calendar_router
+from api_services.calendar_sync_service import calendar_router, start_auto_sync, stop_auto_sync
 
 # Configure logging
 logging.basicConfig(
@@ -33,13 +34,37 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app
+
+# Lifespan context manager for startup/shutdown events
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
+    # Startup
+    logger.info("🚀 Starting Ether Clinic API...")
+    
+    # Start auto-sync for calendar
+    try:
+        await start_auto_sync()
+        logger.info("📅 Calendar auto-sync initialized")
+    except Exception as e:
+        logger.warning(f"📅 Calendar auto-sync not started: {e}")
+    
+    yield  # Server is running
+    
+    # Shutdown
+    logger.info("🛑 Shutting down Ether Clinic API...")
+    await stop_auto_sync()
+    logger.info("📅 Calendar auto-sync stopped")
+
+
+# Create FastAPI app with lifespan
 app = FastAPI(
     title="Ether Clinic API",
     description="REST API for clinic staff dashboard - manages patients, appointments, and clinic operations",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # Get allowed origins from environment variable or use defaults
