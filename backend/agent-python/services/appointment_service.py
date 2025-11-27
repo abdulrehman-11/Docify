@@ -6,6 +6,14 @@ from models.patient import Patient
 from datetime import datetime, timedelta, time
 import logging
 
+# Import Google Calendar service
+try:
+    from services.google_calendar_service import get_calendar_service
+    CALENDAR_AVAILABLE = True
+except ImportError:
+    CALENDAR_AVAILABLE = False
+    get_calendar_service = None
+
 logger = logging.getLogger(__name__)
 
 class AppointmentService:
@@ -190,6 +198,28 @@ class AppointmentService:
         )
         self.session.add(appointment)
         await self.session.flush()  # Get appointment.id
+        
+        # Create Google Calendar event
+        if CALENDAR_AVAILABLE:
+            try:
+                calendar_service = get_calendar_service()
+                event_id = calendar_service.create_event(
+                    patient_name=patient.name,
+                    patient_email=patient.email,
+                    patient_phone=patient.phone,
+                    reason=reason,
+                    start_time=start_time,
+                    end_time=end_time,
+                    appointment_id=appointment.id
+                )
+                if event_id:
+                    appointment.google_calendar_event_id = event_id
+                    await self.session.flush()
+                    logger.info(f"Created calendar event {event_id} for appointment {appointment.id}")
+            except Exception as e:
+                logger.error(f"Failed to create calendar event: {e}")
+                # Continue without calendar - appointment is still valid
+        
         logger.info(f"Booked appointment ID {appointment.id} for patient {patient.email}")
         return appointment
 
@@ -209,9 +239,22 @@ class AppointmentService:
         if appointment.status == AppointmentStatus.CANCELLED:
             raise ValueError(f"Appointment {appointment_id} is already cancelled")
 
+        # Store calendar event ID before cancelling
+        calendar_event_id = appointment.google_calendar_event_id
+
         appointment.status = AppointmentStatus.CANCELLED
         appointment.cancellation_reason = cancellation_reason
         await self.session.flush()
+        
+        # Delete from Google Calendar
+        if calendar_event_id and CALENDAR_AVAILABLE:
+            try:
+                calendar_service = get_calendar_service()
+                calendar_service.delete_event(calendar_event_id)
+                logger.info(f"Deleted calendar event {calendar_event_id}")
+            except Exception as e:
+                logger.error(f"Failed to delete calendar event: {e}")
+        
         logger.info(f"Cancelled appointment ID {appointment_id}")
         return appointment
 
@@ -249,8 +292,16 @@ class AppointmentService:
         if conflicting:
             raise ValueError("New time slot is not available")
 
+        # Store old calendar event ID
+        old_calendar_event_id = old_appointment.google_calendar_event_id
+
         # Mark old as rescheduled
         old_appointment.status = AppointmentStatus.RESCHEDULED
+
+        # Get patient for calendar event
+        patient_stmt = select(Patient).where(Patient.id == old_appointment.patient_id)
+        patient_result = await self.session.execute(patient_stmt)
+        patient = patient_result.scalar_one_or_none()
 
         # Create new appointment
         new_appointment = Appointment(
@@ -262,6 +313,34 @@ class AppointmentService:
         )
         self.session.add(new_appointment)
         await self.session.flush()
+        
+        # Handle Google Calendar - delete old event and create new one
+        if CALENDAR_AVAILABLE and patient:
+            try:
+                calendar_service = get_calendar_service()
+                
+                # Delete old event if exists
+                if old_calendar_event_id:
+                    calendar_service.delete_event(old_calendar_event_id)
+                    logger.info(f"Deleted old calendar event {old_calendar_event_id}")
+                
+                # Create new calendar event
+                event_id = calendar_service.create_event(
+                    patient_name=patient.name,
+                    patient_email=patient.email,
+                    patient_phone=patient.phone,
+                    reason=old_appointment.reason,
+                    start_time=new_start_time,
+                    end_time=new_end_time,
+                    appointment_id=new_appointment.id
+                )
+                if event_id:
+                    new_appointment.google_calendar_event_id = event_id
+                    await self.session.flush()
+                    logger.info(f"Created calendar event {event_id} for rescheduled appointment {new_appointment.id}")
+            except Exception as e:
+                logger.error(f"Failed to update calendar for reschedule: {e}")
+        
         logger.info(f"Rescheduled appointment {appointment_id} to new appointment {new_appointment.id}")
         return new_appointment
 

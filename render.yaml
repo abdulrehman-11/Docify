@@ -9,8 +9,8 @@ services:
     region: oregon  # Change to your preferred region
     plan: free  # Change to 'starter' or higher for production
     
-    # Build settings
-    buildCommand: "cd backend/api && pip install -r requirements.txt"
+    # Build settings - Install both API and agent-python dependencies
+    buildCommand: "cd backend/api && pip install -r requirements.txt && pip install -r ../agent-python/requirements.txt && pip install python-dateutil pytz"
     startCommand: "cd backend/api && uvicorn main:app --host 0.0.0.0 --port $PORT"
     
     # Environment variables (set these in Render dashboard)
@@ -21,6 +21,10 @@ services:
         sync: false  # Set to your Vercel frontend URL
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false  # Set this in Render dashboard - paste the entire JSON content
+      - key: GOOGLE_CALENDAR_ID
+        value: abdul.dev010@gmail.com
     
     # Health check
     healthCheckPath: /health

@@ -245,6 +245,111 @@ class CalendarSyncService:
             logger.error(f"Failed to stop calendar watch: {e}")
             return {"error": str(e)}
 
+    async def sync_db_to_calendar(self) -> Dict[str, Any]:
+        """
+        Sync appointments from database TO Google Calendar.
+        Creates calendar events for appointments that don't have one.
+        
+        Returns summary of synced appointments.
+        """
+        if not self._is_available():
+            return {"error": "Calendar service not available"}
+        
+        results = {
+            "synced": 0,
+            "skipped": 0,
+            "errors": [],
+            "details": []
+        }
+        
+        try:
+            # Get all CONFIRMED appointments without calendar event IDs
+            stmt = select(Appointment, Patient).join(
+                Patient, Appointment.patient_id == Patient.id
+            ).where(
+                Appointment.google_calendar_event_id.is_(None),
+                Appointment.status == AppointmentStatus.CONFIRMED
+            )
+            
+            db_result = await self.session.execute(stmt)
+            rows = db_result.all()
+            
+            logger.info(f"Found {len(rows)} appointments to sync to calendar")
+            
+            for appointment, patient in rows:
+                try:
+                    # Create calendar event
+                    event_id = self.calendar_service.create_event(
+                        patient_name=patient.name,
+                        patient_email=patient.email,
+                        patient_phone=patient.phone,
+                        reason=appointment.reason or "Appointment",
+                        start_time=appointment.start_time,
+                        end_time=appointment.end_time,
+                        appointment_id=appointment.id
+                    )
+                    
+                    if event_id:
+                        appointment.google_calendar_event_id = event_id
+                        results["synced"] += 1
+                        results["details"].append({
+                            "appointment_id": appointment.id,
+                            "patient": patient.name,
+                            "calendar_event_id": event_id
+                        })
+                        logger.info(f"Synced appointment {appointment.id} to calendar: {event_id}")
+                    else:
+                        results["skipped"] += 1
+                        results["errors"].append(f"Failed to create event for appointment {appointment.id}")
+                        
+                except Exception as e:
+                    results["skipped"] += 1
+                    results["errors"].append(f"Error syncing appointment {appointment.id}: {str(e)}")
+                    logger.error(f"Error syncing appointment {appointment.id}: {e}")
+            
+            await self.session.commit()
+            
+        except Exception as e:
+            logger.error(f"DB to calendar sync error: {e}")
+            results["errors"].append(str(e))
+            await self.session.rollback()
+        
+        return results
+
+    async def get_all_calendar_events(self) -> Dict[str, Any]:
+        """
+        Get all events from Google Calendar (for debugging/verification).
+        """
+        if not self._is_available():
+            return {"error": "Calendar service not available"}
+        
+        try:
+            events = self.calendar_service.service.events().list(
+                calendarId=self.calendar_service.calendar_id,
+                timeMin=datetime.now(timezone.utc).isoformat(),
+                maxResults=100,
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+            
+            items = events.get('items', [])
+            return {
+                "count": len(items),
+                "events": [
+                    {
+                        "id": e.get('id'),
+                        "summary": e.get('summary'),
+                        "start": e.get('start', {}).get('dateTime'),
+                        "end": e.get('end', {}).get('dateTime'),
+                        "status": e.get('status')
+                    }
+                    for e in items
+                ]
+            }
+        except Exception as e:
+            logger.error(f"Error getting calendar events: {e}")
+            return {"error": str(e)}
+
 
 # Route handlers for calendar sync
 from fastapi import APIRouter, Depends, Request, HTTPException, Header, BackgroundTasks
@@ -334,4 +439,62 @@ async def get_calendar_status():
         "status": "available",
         "calendar_id": calendar_service.calendar_id,
         "timezone": CLINIC_TIMEZONE
+    }
+
+
+@calendar_router.post("/sync-to-calendar")
+async def sync_db_to_calendar(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Sync existing appointments FROM database TO Google Calendar.
+    
+    Creates calendar events for all CONFIRMED appointments that don't 
+    have a google_calendar_event_id yet.
+    
+    Use this to:
+    - Backfill calendar for existing appointments
+    - Re-sync after calendar issues
+    """
+    service = CalendarSyncService(db)
+    result = await service.sync_db_to_calendar()
+    return result
+
+
+@calendar_router.get("/events")
+async def get_calendar_events(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all upcoming events from Google Calendar.
+    
+    Useful for debugging and verifying calendar sync.
+    """
+    service = CalendarSyncService(db)
+    result = await service.get_all_calendar_events()
+    return result
+
+
+@calendar_router.post("/full-sync")
+async def full_bidirectional_sync(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Perform a full bi-directional sync:
+    1. First sync DB -> Calendar (create missing events)
+    2. Then sync Calendar -> DB (update times, handle deletions)
+    
+    Use this for complete synchronization.
+    """
+    service = CalendarSyncService(db)
+    
+    # Step 1: DB to Calendar
+    db_to_cal_result = await service.sync_db_to_calendar()
+    
+    # Step 2: Calendar to DB
+    cal_to_db_result = await service.sync_calendar_to_db()
+    
+    return {
+        "db_to_calendar": db_to_cal_result,
+        "calendar_to_db": cal_to_db_result
     }
