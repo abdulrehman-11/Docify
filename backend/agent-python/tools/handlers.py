@@ -281,4 +281,3 @@ def register_handlers(router: ToolRouter, session_factory=None) -> None:
 
   logger.info("Registered 9 appointment handlers with database integration")
 
-

@@ -1,5 +1,5 @@
 # Root level gitignore
-
+echo "backend/agent-python/.venv-migrate/" >> .gitignore
 # Frontend build artifacts
 frontend/dist
 frontend/dist-ssr

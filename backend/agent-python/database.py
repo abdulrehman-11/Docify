@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.orm import declarative_base
 import logging
 import os
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 # Load environment variables from .env.local
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 # Database URL from environment
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable is required")
+    raise ValueError("DATABASE_URL environment variable is required for deployment")
 
 # Create async engine with Neon-optimized settings
 engine: AsyncEngine = create_async_engine(
@@ -21,7 +22,8 @@ engine: AsyncEngine = create_async_engine(
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,  # Verify connections before use
-    pool_recycle=3600,  # Recycle connections after 1 hour
+    pool_recycle=1800,  # Recycle periodically to keep connections fresh
+    pool_timeout=30,
 )
 
 # Session factory for creating async sessions
@@ -46,4 +48,8 @@ async def get_db() -> AsyncSession:
         finally:
             await session.close()
 
-logger.info("Database engine created with pool_size=10, max_overflow=20")
+parsed = urlparse(DATABASE_URL)
+logger.info(
+    "Database engine created for host=%s pool_size=10 max_overflow=20",
+    parsed.hostname,
+)
