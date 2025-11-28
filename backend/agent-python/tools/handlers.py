@@ -239,8 +239,54 @@ async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleApp
 
 
 async def get_hours(i: GetHoursInput) -> GetHoursOutput:
+  """Get clinic hours dynamically from database."""
   logger.info("Executing get_hours handler")
-  return GetHoursOutput(hours_text="Mon–Fri 8am–6pm; Sat 9am–1pm; Sun closed")
+  
+  async with _session_factory() as session:
+    service = AppointmentService(session)
+    
+    # Get all clinic hours from database
+    all_hours = await service.get_all_clinic_hours()
+    
+    if not all_hours:
+      # Fallback if no hours configured
+      return GetHoursOutput(hours_text="Clinic hours not configured. Please contact us for availability.")
+    
+    # Day name mapping
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    short_day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    
+    # Build hours text
+    hours_parts = []
+    for hours in all_hours:
+      day_name = short_day_names[hours.day_of_week]
+      if hours.is_active:
+        start = hours.start_time.strftime("%I:%M%p").lstrip("0").lower()
+        end = hours.end_time.strftime("%I:%M%p").lstrip("0").lower()
+        
+        # Add break info if exists
+        if hours.break_start and hours.break_end:
+          break_start = hours.break_start.strftime("%I:%M%p").lstrip("0").lower()
+          break_end = hours.break_end.strftime("%I:%M%p").lstrip("0").lower()
+          hours_parts.append(f"{day_name}: {start}-{end} (break {break_start}-{break_end})")
+        else:
+          hours_parts.append(f"{day_name}: {start}-{end}")
+      else:
+        hours_parts.append(f"{day_name}: closed")
+    
+    hours_text = "; ".join(hours_parts)
+    
+    # Add upcoming holidays info
+    upcoming_holidays = await service.get_all_holidays()
+    if upcoming_holidays:
+      # Filter for future holidays only
+      today = datetime.now().date()
+      future_holidays = [h for h in upcoming_holidays if h.date >= today]
+      if future_holidays and len(future_holidays) <= 3:
+        holiday_info = ", ".join([f"{h.name} ({h.date.strftime('%b %d')})" for h in future_holidays[:3]])
+        hours_text += f". Upcoming closures: {holiday_info}"
+    
+    return GetHoursOutput(hours_text=hours_text)
 
 
 async def get_location(i: GetLocationInput) -> GetLocationOutput:

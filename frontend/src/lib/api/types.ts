@@ -95,13 +95,55 @@ export interface ClinicHours {
   start_time: string; // HH:MM:SS
   end_time: string; // HH:MM:SS
   is_active: boolean;
+  break_start: string | null; // HH:MM:SS or null
+  break_end: string | null; // HH:MM:SS or null
   created_at: string;
+  updated_at: string | null;
 }
 
 export interface ClinicHoursUpdate {
   start_time?: string;
   end_time?: string;
   is_active?: boolean;
+  break_start?: string | null;
+  break_end?: string | null;
+}
+
+export interface ClinicHoursBulkUpdate {
+  day_of_weeks: number[];
+  start_time?: string;
+  end_time?: string;
+  is_active?: boolean;
+  break_start?: string | null;
+  break_end?: string | null;
+}
+
+// Clinic Holiday types
+export interface ClinicHoliday {
+  id: number;
+  date: string; // YYYY-MM-DD
+  name: string;
+  is_full_day: boolean;
+  start_time: string | null; // HH:MM:SS (custom hours if not full day off)
+  end_time: string | null; // HH:MM:SS
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface ClinicHolidayCreate {
+  date: string; // YYYY-MM-DD
+  name: string;
+  is_full_day: boolean;
+  start_time?: string | null;
+  end_time?: string | null;
+}
+
+export interface ClinicHolidayUpdate {
+  date?: string;
+  name?: string;
+  is_full_day?: boolean;
+  start_time?: string | null;
+  end_time?: string | null;
 }
 
 // Dashboard types

@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from models.appointment import Appointment, AppointmentStatus
-from models.clinic_hours import ClinicHours
+from models.clinic_hours import ClinicHours, ClinicHoliday
 from models.patient import Patient
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date as date_type
 import logging
 
 # Import Google Calendar service
@@ -35,6 +35,24 @@ class AppointmentService:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_holiday(self, check_date: date_type) -> ClinicHoliday | None:
+        """Check if a specific date is a clinic holiday."""
+        stmt = select(ClinicHoliday).where(ClinicHoliday.date == check_date)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_all_holidays(self) -> list[ClinicHoliday]:
+        """Get all clinic holidays."""
+        stmt = select(ClinicHoliday).order_by(ClinicHoliday.date)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def get_all_clinic_hours(self) -> list[ClinicHours]:
+        """Get clinic hours for all days."""
+        stmt = select(ClinicHours).order_by(ClinicHours.day_of_week)
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
     async def check_availability(
         self,
         start_date: datetime,
@@ -42,7 +60,8 @@ class AppointmentService:
     ) -> list[dict[str, str]]:
         """
         Generate available 30-minute slots between start_date and end_date.
-        Excludes already booked slots and slots outside clinic hours.
+        Excludes already booked slots, slots outside clinic hours,
+        break time slots, and holidays.
 
         Args:
             start_date: Start of time window (ISO8601)
@@ -55,6 +74,29 @@ class AppointmentService:
         current_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
         while current_date <= end_date:
+            # Check if this date is a holiday
+            holiday = await self.get_holiday(current_date.date())
+            if holiday:
+                if holiday.is_full_day:
+                    # Full day holiday - skip entire day
+                    logger.info(f"Skipping {current_date.date()} - holiday: {holiday.name}")
+                    current_date += timedelta(days=1)
+                    continue
+                else:
+                    # Partial day holiday with custom hours
+                    if holiday.start_time and holiday.end_time:
+                        # Generate slots only for custom hours on holiday
+                        day_slots = await self._generate_slots_for_day(
+                            current_date,
+                            holiday.start_time,
+                            holiday.end_time,
+                            break_start=None,  # No break on holiday custom hours
+                            break_end=None
+                        )
+                        available_slots.extend(day_slots)
+                        current_date += timedelta(days=1)
+                        continue
+
             day_of_week = current_date.weekday()  # 0=Monday
             clinic_hours = await self.get_clinic_hours(day_of_week)
 
@@ -63,11 +105,13 @@ class AppointmentService:
                 current_date += timedelta(days=1)
                 continue
 
-            # Generate slots for this day
+            # Generate slots for this day, excluding break time
             day_slots = await self._generate_slots_for_day(
                 current_date,
                 clinic_hours.start_time,
-                clinic_hours.end_time
+                clinic_hours.end_time,
+                break_start=clinic_hours.break_start,
+                break_end=clinic_hours.break_end
             )
             available_slots.extend(day_slots)
             current_date += timedelta(days=1)
@@ -85,12 +129,24 @@ class AppointmentService:
         self,
         date: datetime,
         clinic_start: time,
-        clinic_end: time
+        clinic_end: time,
+        break_start: time | None = None,
+        break_end: time | None = None
     ) -> list[dict[str, str]]:
-        """Generate all possible 30-min slots for a single day."""
+        """Generate all possible 30-min slots for a single day, excluding break time."""
         slots = []
         current_time = datetime.combine(date.date(), clinic_start)
         end_time = datetime.combine(date.date(), clinic_end)
+
+        # Create break time datetime objects if break times exist
+        break_start_dt = None
+        break_end_dt = None
+        if break_start and break_end:
+            break_start_dt = datetime.combine(date.date(), break_start)
+            break_end_dt = datetime.combine(date.date(), break_end)
+            if date.tzinfo is not None:
+                break_start_dt = break_start_dt.replace(tzinfo=date.tzinfo)
+                break_end_dt = break_end_dt.replace(tzinfo=date.tzinfo)
 
         # Preserve timezone info if date has it
         if date.tzinfo is not None:
@@ -109,13 +165,19 @@ class AppointmentService:
             slot_start = current_time
             slot_end = current_time + timedelta(minutes=self.SLOT_DURATION_MINUTES)
 
+            # Check if slot overlaps with break time
+            is_during_break = False
+            if break_start_dt and break_end_dt:
+                # A slot is during break if it overlaps with break period
+                is_during_break = self._slots_overlap(slot_start, slot_end, break_start_dt, break_end_dt)
+
             # Check if slot overlaps with any booked appointment
-            is_available = not any(
+            is_booked = any(
                 self._slots_overlap(slot_start, slot_end, booked_start, booked_end)
                 for booked_start, booked_end in booked_slots
             )
 
-            if is_available:
+            if not is_during_break and not is_booked:
                 slots.append({
                     "start": slot_start.isoformat(),
                     "end": slot_end.isoformat()
