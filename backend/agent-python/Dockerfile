@@ -1,33 +1,34 @@
-# Use an official Python image - slim for smaller image size
+# Use an official Python runtime as base image
 FROM python:3.12-slim
 
 # Set environment variables for Python optimization
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Set the working directory
+# Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies required for some Python packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies (needed for some Python packages)
+RUN apt-get update && apt-get install -y \
     gcc \
-    libpq-dev \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better Docker layer caching
+# This allows Docker to cache the pip install step if requirements haven't changed
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies with cache mount for faster builds on Railway
+# Railway supports cache mounts which speeds up subsequent builds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-# Copy the rest of the project files
+# Copy the entire application code
 COPY . .
 
-# Expose port (not required for LiveKit WebSocket agent, but useful for debugging)
-EXPOSE 8000
-
-# Default command - Railway overrides this via railway.json startCommand
-# Pre-deploy runs migrations via railway.json preDeployCommand
-CMD ["python", "agent.py", "start"]
+# Run database migrations and start the agent
+# Railway will execute this CMD when the container starts
+CMD alembic upgrade head && python agent.py start
