@@ -20,15 +20,13 @@ RUN apt-get update && apt-get install -y \
 # This allows Docker to cache the pip install step if requirements haven't changed
 COPY requirements.txt .
 
-# Install Python dependencies with cache mount for faster builds on Railway
-# Railway supports cache mounts which speeds up subsequent builds
-RUN --mount=type=cache,target=/root/.cache/pip \
+# Install Python dependencies with Railway-compatible cache mount
+RUN --mount=type=cache,id=pip-cache \
     pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # Copy the entire application code
 COPY . .
 
-# Run database migrations and start the agent
-# Railway will execute this CMD when the container starts
-CMD alembic upgrade head && python agent.py start
+# Start the agent (migrations run via railway.json preDeployCommand)
+CMD ["python", "agent.py", "start"]
