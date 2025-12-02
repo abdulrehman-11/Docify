@@ -48,7 +48,11 @@ const AdminDashboard = () => {
 
   const handleDateClick = (date: Date) => {
     // Navigate to appointments page with date filter
-    const dateParam = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Use local date components to avoid timezone conversion issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateParam = `${year}-${month}-${day}`; // YYYY-MM-DD format in local timezone
     navigate(`/admin/appointments?date=${dateParam}`);
   };
 
@@ -147,25 +151,44 @@ const AdminDashboard = () => {
                 <p className="text-muted-foreground text-center py-4">No appointments today</p>
               ) : (
                 <div className="space-y-4">
-                  {todayAppointments.slice(0, 5).map((apt) => (
-                    <div key={apt.id} className="flex items-start gap-3 p-3 glass rounded-xl">
-                      <Calendar className="w-4 h-4 mt-1 text-primary" />
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{apt.patient_name}</p>
-                        <p className="text-xs text-muted-foreground">{apt.reason}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {format(parseUTCDate(apt.start_time), 'h:mm a')}
-                        </p>
+                  {todayAppointments.slice(0, 5).map((apt) => {
+                    // Safely parse the time
+                    let timeDisplay = 'Time not available';
+                    try {
+                      const startTime = parseUTCDate(apt.start_time);
+                      const endTime = parseUTCDate(apt.end_time);
+                      timeDisplay = `${format(startTime, 'h:mm a')} - ${format(endTime, 'h:mm a')}`;
+                    } catch (e) {
+                      console.error('Error parsing appointment time:', e);
+                    }
+                    
+                    return (
+                      <div key={apt.id} className="flex items-start gap-3 p-3 glass rounded-xl">
+                        <Clock className="w-4 h-4 mt-1 text-primary" />
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">{apt.patient_name}</p>
+                          <p className="text-xs text-muted-foreground">{apt.reason}</p>
+                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {timeDisplay}
+                          </p>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          apt.status === 'CONFIRMED' ? 'bg-blue-500/20 text-blue-500' :
+                          apt.status === 'COMPLETED' ? 'bg-green-500/20 text-green-500' :
+                          apt.status === 'CANCELLED' ? 'bg-red-500/20 text-red-500' :
+                          'bg-gray-500/20 text-gray-500'
+                        }`}>
+                          {apt.status}
+                        </span>
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        apt.status === 'CONFIRMED' ? 'bg-blue-500/20 text-blue-500' :
-                        apt.status === 'COMPLETED' ? 'bg-green-500/20 text-green-500' :
-                        'bg-gray-500/20 text-gray-500'
-                      }`}>
-                        {apt.status}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
+                  {todayAppointments.length > 5 && (
+                    <p className="text-xs text-center text-muted-foreground">
+                      +{todayAppointments.length - 5} more appointments
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>

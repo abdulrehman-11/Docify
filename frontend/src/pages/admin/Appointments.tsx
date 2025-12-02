@@ -40,12 +40,14 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Calendar as CalendarIcon, Clock, User, X, Search } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Plus, Calendar as CalendarIcon, Clock, User, X, Search, AlertCircle, Info } from 'lucide-react';
 import { appointmentApi, patientApi } from '@/lib/api';
 import type { Appointment, Patient, AppointmentCreate, AppointmentUpdate } from '@/lib/api/types';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { parseUTCDate, formatBackendDate, utcToLocalDateTime, localDateTimeToUTC } from '@/lib/dateUtils';
+import { validateAppointmentTime, getClinicHoursForDate, getClinicSchedule, type ValidationResult } from '@/lib/clinicValidation';
 
 const Appointments = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -79,6 +81,11 @@ const Appointments = () => {
   });
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [cancellationReason, setCancellationReason] = useState('');
+
+  // Clinic validation states
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [clinicHoursInfo, setClinicHoursInfo] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -116,7 +123,66 @@ const Appointments = () => {
       reason: '',
     });
     setSelectedAppointment(null);
+    setValidationError(null);
+    setClinicHoursInfo(null);
   };
+
+  // Validate appointment time when start_time changes
+  const validateAndUpdateTime = async (startTime: string, endTime: string) => {
+    if (!startTime) {
+      setValidationError(null);
+      setClinicHoursInfo(null);
+      return;
+    }
+
+    setIsValidating(true);
+    try {
+      const startDate = new Date(startTime);
+      const endDate = endTime ? new Date(endTime) : null;
+      
+      // Calculate duration in minutes
+      const durationMinutes = endDate ? Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60)) : 30;
+      
+      // Validate the appointment time
+      const validation = await validateAppointmentTime(startDate, durationMinutes > 0 ? durationMinutes : 30);
+      
+      if (!validation.isValid) {
+        setValidationError(validation.error || 'Invalid appointment time');
+      } else {
+        setValidationError(null);
+      }
+      
+      // Get clinic hours info for this date
+      const hoursInfo = await getClinicHoursForDate(startDate);
+      if (hoursInfo) {
+        if (!hoursInfo.isOpen) {
+          setClinicHoursInfo(hoursInfo.holidayName 
+            ? `Clinic closed: ${hoursInfo.holidayName}` 
+            : 'Clinic is closed on this day');
+        } else {
+          let info = `Hours: ${hoursInfo.openTime} - ${hoursInfo.closeTime}`;
+          if (hoursInfo.breakStart && hoursInfo.breakEnd) {
+            info += ` (Break: ${hoursInfo.breakStart} - ${hoursInfo.breakEnd})`;
+          }
+          if (hoursInfo.holidayName) {
+            info += ` - ${hoursInfo.holidayName} (Modified hours)`;
+          }
+          setClinicHoursInfo(info);
+        }
+      }
+    } catch (error) {
+      console.error('Validation error:', error);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  // Effect to validate when form times change
+  useEffect(() => {
+    if (formData.start_time) {
+      validateAndUpdateTime(formData.start_time, formData.end_time);
+    }
+  }, [formData.start_time, formData.end_time]);
 
   const handleCreateAppointment = async () => {
     if (!formData.patient_id || !formData.start_time || !formData.end_time || !formData.reason) {
@@ -136,6 +202,15 @@ const Appointments = () => {
 
     if (endDate <= startDate) {
       toast.error('End time must be after start time');
+      return;
+    }
+
+    // Validate against clinic hours and holidays
+    const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
+    const validation = await validateAppointmentTime(startDate, durationMinutes);
+    
+    if (!validation.isValid) {
+      toast.error(validation.error || 'Invalid appointment time');
       return;
     }
 
@@ -181,6 +256,15 @@ const Appointments = () => {
 
     if (endDate <= startDate) {
       toast.error('End time must be after start time');
+      return;
+    }
+
+    // Validate against clinic hours and holidays
+    const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
+    const validation = await validateAppointmentTime(startDate, durationMinutes);
+    
+    if (!validation.isValid) {
+      toast.error(validation.error || 'Invalid appointment time');
       return;
     }
 
@@ -303,12 +387,15 @@ const Appointments = () => {
       try {
         // Parse appointment time as wall clock time
         const aptDate = parseUTCDate(apt.start_time);
-        const filterDate = new Date(selectedDate);
         
-        // Compare dates only (ignore time)
-        const aptDateStr = aptDate.toISOString().split('T')[0];
-        const filterDateStr = filterDate.toISOString().split('T')[0];
-        const matches = aptDateStr === filterDateStr;
+        // selectedDate is already in YYYY-MM-DD format (local)
+        // Compare using local date components to avoid timezone issues
+        const aptYear = aptDate.getFullYear();
+        const aptMonth = String(aptDate.getMonth() + 1).padStart(2, '0');
+        const aptDay = String(aptDate.getDate()).padStart(2, '0');
+        const aptDateStr = `${aptYear}-${aptMonth}-${aptDay}`;
+        
+        const matches = aptDateStr === selectedDate;
         
         if (!matches) {
           return false;
@@ -554,6 +641,27 @@ const Appointments = () => {
                 onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
               />
             </div>
+            
+            {/* Clinic Hours Info */}
+            {clinicHoursInfo && (
+              <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-700 dark:text-blue-300">
+                  {clinicHoursInfo}
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {/* Validation Error */}
+            {validationError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {validationError}
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <div className="grid gap-2">
               <Label htmlFor="reason">Reason for Visit</Label>
               <Textarea
@@ -569,7 +677,9 @@ const Appointments = () => {
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateAppointment}>Create Appointment</Button>
+            <Button onClick={handleCreateAppointment} disabled={!!validationError || isValidating}>
+              {isValidating ? 'Validating...' : 'Create Appointment'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -621,6 +731,27 @@ const Appointments = () => {
                 onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
               />
             </div>
+            
+            {/* Clinic Hours Info */}
+            {clinicHoursInfo && (
+              <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-700 dark:text-blue-300">
+                  {clinicHoursInfo}
+                </AlertDescription>
+              </Alert>
+            )}
+            
+            {/* Validation Error */}
+            {validationError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {validationError}
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <div className="grid gap-2">
               <Label htmlFor="edit-reason">Reason for Visit</Label>
               <Textarea
@@ -636,7 +767,9 @@ const Appointments = () => {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleUpdateAppointment}>Save Changes</Button>
+            <Button onClick={handleUpdateAppointment} disabled={!!validationError || isValidating}>
+              {isValidating ? 'Validating...' : 'Save Changes'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

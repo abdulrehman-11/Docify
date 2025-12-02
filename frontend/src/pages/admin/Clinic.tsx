@@ -16,6 +16,7 @@ import type { ClinicHours, ClinicHoursUpdate, ClinicHoliday, ClinicHolidayCreate
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { clearClinicScheduleCache } from '@/lib/clinicValidation';
 
 const daysOfWeek = [
   { id: 0, name: 'Monday', short: 'Mon' },
@@ -98,6 +99,8 @@ const Clinic = () => {
       ]);
       setClinicHours(hoursData);
       setHolidays(holidaysData);
+      // Clear validation cache so appointment booking picks up fresh data
+      clearClinicScheduleCache();
     } catch (error: any) {
       toast.error('Failed to load clinic data');
     } finally {
