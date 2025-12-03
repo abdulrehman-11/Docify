@@ -4,6 +4,11 @@
 .env.*.local
 *.env
 
+# Google Service Account Credentials - NEVER COMMIT!
+google_service_account.json
+*service_account*.json
+hexaa-clinic-calendar*.json
+
 # Dependencies
 node_modules/
 
