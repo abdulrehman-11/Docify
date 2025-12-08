@@ -1,276 +1,543 @@
-# Ether Clinic - Complete AI Clinic Calling Agent System# Ether Clinic - AI-Powered Clinic Calling Agent System
+# 🏥 Docify - AI-Powered Clinic Management System
 
+A comprehensive full-stack clinic management platform featuring an intelligent AI voice calling agent, web-based dashboard, and seamless Google Calendar integration. Built with React, FastAPI, LiveKit, and OpenAI.
 
+[![React](https://img.shields.io/badge/React-18.3.1-blue.svg)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-blue.svg)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Latest-green.svg)](https://fastapi.tiangolo.com/)
+[![LiveKit](https://img.shields.io/badge/LiveKit-1.0.19-orange.svg)](https://livekit.io/)
 
-A full-stack application combining a React frontend with Python AI backend for managing clinic operations with an intelligent calling agent.A complete frontend application for managing clinic operations with an AI-powered calling agent system.
+---
 
+## 📋 Table of Contents
 
+- [Overview](#-overview)
+- [Key Features](#-key-features)
+- [Architecture](#-architecture)
+- [Tech Stack](#-tech-stack)
+- [Getting Started](#-getting-started)
+- [Project Structure](#-project-structure)
+- [Deployment](#-deployment)
+- [Environment Variables](#-environment-variables)
+- [API Documentation](#-api-documentation)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-## 📁 Project Structure## 🏥 Project Overview
+---
 
+## 🎯 Overview
 
+**Docify** is an enterprise-grade clinic management system designed for healthcare providers. It combines three powerful components:
 
-```**Ether Clinic** is a comprehensive clinic management system that enables healthcare providers to:
+1. **🎙️ AI Voice Agent** - Intelligent phone receptionist powered by LiveKit and OpenAI that handles appointment bookings, cancellations, rescheduling, and answers patient questions 24/7
+2. **💻 Web Dashboard** - Modern React-based interface for clinic staff to manage appointments, patients, providers, and clinic operations
+3. **📅 Calendar Sync** - Real-time bi-directional synchronization with Google Calendar for seamless scheduling
 
-ether-clinic/- Manage appointments with a visual calendar interface
+### What Makes Docify Special?
 
-├── frontend/          # React + TypeScript frontend application- Control staff accounts with custom permissions
+- **Voice AI Integration**: Natural language processing for phone conversations using OpenAI GPT-4
+- **Real-time Voice Processing**: LiveKit-powered low-latency voice communications with barge-in detection
+- **Smart Scheduling**: Automatic appointment slot detection based on clinic hours and existing bookings
+- **Calendar Sync**: Two-way sync with Google Calendar - changes reflect instantly
+- **Role-Based Access**: Granular permissions for admin and staff users
+- **PostgreSQL Backend**: Robust data persistence with SQLAlchemy ORM
+- **Modern UI/UX**: Beautiful glassmorphism design with Tailwind CSS and shadcn/ui components
 
-│   ├── src/          # Source code for the web interface- Maintain provider schedules and availability
+---
 
-│   ├── public/       # Static assets- Configure clinic information and operating hours
+## ✨ Key Features
 
-│   └── package.json  # Frontend dependencies- Define services and their durations
+### 🎙️ AI Voice Agent (LiveKit + OpenAI)
+- **Natural Conversations**: GPT-4 powered voice assistant that understands patient requests
+- **Appointment Booking**: Automated scheduling with slot availability checking
+- **Appointment Management**: Cancel and reschedule existing appointments via phone
+- **Information Queries**: Answer questions about clinic hours, location, and services
+- **Voice Activity Detection**: Barge-in support for natural interruptions
+- **Google Calendar Integration**: Real-time sync of all phone-booked appointments
+- **Database Persistence**: All appointments stored in PostgreSQL
 
-│- Build an AI knowledge base for common patient questions
+### 💻 Web Dashboard (React + TypeScript)
 
-└── backend/          # Python AI agent backend
+#### Admin Features
+- **Dashboard Overview**: Real-time statistics and appointment metrics
+- **Appointment Management**: 
+  - Visual calendar with month/week/day views
+  - Create, edit, cancel, and complete appointments
+  - Status tracking (scheduled, confirmed, completed, cancelled)
+  - Patient information management
+  - Google Calendar sync status
+- **Patient Management**: 
+  - Complete patient database with contact information
+  - Appointment history per patient
+  - Add/edit/delete patient records
+- **Staff Management**: 
+  - Create staff accounts with custom permissions
+  - Assign specific providers to staff members
+  - Role-based access control
+- **Provider Management**: 
+  - Doctor profiles with bios and specializations
+  - Weekly schedule editor (Monday-Sunday)
+  - Contact information and availability
+- **Clinic Configuration**: 
+  - Operating hours for each day of the week
+  - Contact information (address, phone, email)
+  - Service catalog with durations
+- **Knowledge Base**: 
+  - AI response configuration for common questions
+  - Category-based organization
+  - Search and filter capabilities
 
-    ├── agent-python/ # AI calling agent implementation## 🚀 Features
+#### Staff Features
+- **Limited Dashboard**: View appointments for assigned providers only
+- **Permission-Based Access**: Custom permissions control available actions
+- **Appointment Management**: Based on assigned permissions
 
-    └── README.md     # Backend documentation
+### 📅 Calendar Integration
+- **Two-Way Sync**: Changes in dashboard or Google Calendar reflect instantly
+- **Auto-Sync Service**: Background task syncs every 5 minutes
+- **Conflict Detection**: Prevents double-booking
+- **Event Formatting**: Professional event titles with patient info
 
-```### Admin Dashboard
+### 🔐 Security & Authentication
+- **Role-Based Access Control (RBAC)**: Admin and Staff roles with different permissions
+- **Protected Routes**: Frontend route guards for authorized access
+- **Session Management**: Secure authentication with localStorage
+- **API Security**: CORS configuration for production deployments
 
-- **Appointment Management**: Full calendar view with appointment creation, editing, and status tracking
+---
 
-## 🚀 Quick Start- **Staff Management**: Create and manage staff accounts with granular permissions
+## 🏗️ Architecture
 
-- **Provider Management**: Manage doctors with schedules, bios, and contact information
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         USERS                                    │
+│                                                                   │
+│  📞 Phone Callers    👨‍💼 Admin Users    👩‍⚕️ Staff Users          │
+└────────┬─────────────────┬─────────────────┬────────────────────┘
+         │                 │                 │
+         │                 │                 │
+         ▼                 ▼                 ▼
+┌─────────────────┐  ┌──────────────────────────────────┐
+│   AI Voice      │  │    Web Dashboard (React)         │
+│   Agent         │  │    - Admin Panel                 │
+│   (LiveKit)     │  │    - Staff Panel                 │
+│   - OpenAI GPT  │  │    - Appointment Calendar        │
+│   - Deepgram    │  │    - Patient Management          │
+│   - ElevenLabs  │  │    Deployed on Vercel            │
+└────────┬────────┘  └─────────────┬────────────────────┘
+         │                         │
+         │                         │
+         └───────┬─────────────────┘
+                 │
+                 ▼
+        ┌─────────────────┐
+        │   FastAPI       │
+        │   REST API      │
+        │   (Backend)     │
+        │   Deployed on   │
+        │   Render        │
+        └────────┬────────┘
+                 │
+         ┌───────┴────────┬─────────────────┐
+         │                │                 │
+         ▼                ▼                 ▼
+  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+  │ PostgreSQL  │  │   Google    │  │  Alembic    │
+  │  Database   │  │  Calendar   │  │ Migrations  │
+  │  (Neon)     │  │    API      │  │             │
+  └─────────────┘  └─────────────┘  └─────────────┘
+```
 
-### Frontend Setup- **Services Configuration**: Define clinic services with durations
+### Data Flow
 
-- **Clinic Information**: Edit contact details and operating hours
+1. **Phone Call Flow**: 
+   - Patient calls clinic number → LiveKit connects → AI Agent processes → Books appointment → Stores in PostgreSQL → Syncs to Google Calendar → Shows in Web Dashboard
 
-```bash- **Knowledge Base**: Configure AI responses for common questions
+2. **Dashboard Flow**: 
+   - Admin/Staff logs in → React Dashboard → FastAPI Backend → PostgreSQL Database → Real-time updates → Syncs to Google Calendar
 
-cd frontend- **Audit Logging**: Track all system changes and actions
+3. **Calendar Sync Flow**: 
+   - Background service runs every 5 minutes → Checks Google Calendar for changes → Updates PostgreSQL → Dashboard reflects changes instantly
 
-npm install
-
-npm run dev### Staff Dashboard
-
-```- **Limited Appointment Access**: View and manage appointments for assigned doctors only
-
-- **Permission-Based Actions**: Custom permissions control what staff can do
-
-The frontend will be available at `http://localhost:8080`
+---
 
 ## 🛠️ Tech Stack
 
-**Default Admin Login:**
-
-- Email: `admin@clinic.com`- **Frontend Framework**: React 18.3.1 with TypeScript
-
-- Password: `Admin123`- **Build Tool**: Vite 5.4.19
-
-- **Styling**: Tailwind CSS with custom glassmorphism effects
-
-### Backend Setup- **UI Components**: Radix UI + shadcn/ui
-
-- **Routing**: React Router v6
-
-```bash- **State Management**: React Hooks + localStorage
-
-cd backend/agent-python- **Date Handling**: date-fns
-
-# Follow backend README.md for setup instructions- **Icons**: Lucide React
-
-```- **Notifications**: Sonner
-
-
-
-## 🏥 Features## 📦 Installation
-
-
-
-### Frontend (React + TypeScript)```sh
-
-- **Admin Dashboard** - Complete clinic management interface# Clone the repository
-
-- **Appointment Management** - Visual calendar with booking systemgit clone https://github.com/KhurramTheHexaa-tech/ether-clinic.git
-
-- **Staff Management** - User accounts with custom permissions
-
-- **Provider Management** - Doctor profiles and schedules# Navigate to the project directory
-
-- **Services Configuration** - Define clinic services and durationscd ether-clinic
-
-- **Clinic Settings** - Operating hours and contact information
-
-- **Knowledge Base Editor** - Configure AI responses for common questions# Install dependencies
-
-- **Audit Logging** - Track all system changesnpm install
-
-
-
-### Backend (Python AI Agent)# Start the development server
-
-- **AI Calling Agent** - Intelligent phone interaction systemnpm run dev
-
-- **Natural Language Processing** - Understand patient requests```
-
-- **Appointment Booking** - Automated scheduling via phone
-
-- **Knowledge Base Integration** - Answer common questions## 🔐 Default Login Credentials
-
-- **Voice Integration** - Text-to-speech and speech-to-text
-
-**Admin Account:**
-
-## 🛠️ Tech Stack- Email: `admin@clinic.com`
-
-- Password: `Admin123`
-
 ### Frontend
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| React | 18.3.1 | UI framework |
+| TypeScript | 5.8.3 | Type safety |
+| Vite | 5.4.19 | Build tool |
+| React Router | 6.30.1 | Routing |
+| Tailwind CSS | 3.4.17 | Styling |
+| shadcn/ui | Latest | UI components |
+| Radix UI | Latest | Accessible components |
+| Axios | 1.13.2 | HTTP client |
+| React Query | 5.83.0 | Data fetching |
+| date-fns | 3.6.0 | Date utilities |
+| Lucide React | 0.462.0 | Icons |
+| Sonner | 1.7.4 | Toast notifications |
 
-- **Framework:** React 18.3.1 with TypeScript## 📁 Project Structure
+### Backend - API Server
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Python | 3.11 | Programming language |
+| FastAPI | Latest | Web framework |
+| SQLAlchemy | Latest | ORM |
+| Alembic | 1.17.1 | Database migrations |
+| asyncpg | 0.30.0 | PostgreSQL driver |
+| Pydantic | Latest | Data validation |
+| python-dateutil | Latest | Date handling |
+| Google Calendar API | 2.187.0 | Calendar integration |
 
-- **Build Tool:** Vite 5.4.19
+### Backend - AI Voice Agent
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Python | 3.11 | Programming language |
+| LiveKit | 1.0.19 | Real-time voice |
+| LiveKit Agents | 1.3.5 | Agent framework |
+| OpenAI | Latest | GPT-4 integration |
+| Deepgram | Latest | Speech-to-text |
+| ElevenLabs | Latest | Text-to-speech |
+| SQLAlchemy | Latest | Database ORM |
 
-- **Styling:** Tailwind CSS with glassmorphism effects```
+### Database & Infrastructure
+| Technology | Purpose |
+|------------|---------|
+| PostgreSQL (Neon) | Primary database |
+| Google Calendar API | Appointment sync |
+| Render | Backend hosting |
+| Vercel | Frontend hosting |
 
-- **UI Components:** Radix UI + shadcn/uiether-clinic/
+---
 
-- **Routing:** React Router v6├── src/
+## 🚀 Getting Started
 
-- **State:** React Hooks + localStorage│   ├── components/         # Reusable UI components
+### Prerequisites
 
-- **Icons:** Lucide React│   │   ├── layout/        # Layout components (Navbar, Sidebar, etc.)
+- **Node.js** 16+ and npm
+- **Python** 3.11/3.12
+- **PostgreSQL** database (Neon recommended)
+- **Google Cloud** account with Calendar API enabled
+- **LiveKit** account and API keys
+- **OpenAI** API key
+- **Deepgram** API key (optional)
+- **ElevenLabs** API key (optional)
 
-│   │   └── ui/            # shadcn/ui components
+### Installation
 
-### Backend│   ├── hooks/             # Custom React hooks
-
-- **Language:** Python│   ├── lib/               # Utility functions and storage
-
-- **AI/ML:** OpenAI, LangChain, ChromaDB│   │   ├── auth.ts       # Authentication system
-
-- **Voice:** Twilio, ElevenLabs│   │   ├── storage.ts    # localStorage management
-
-- **Framework:** FastAPI (API endpoints)│   │   └── mockData.ts   # Type definitions
-
-│   ├── pages/             # Page components
-
-## 📖 Documentation│   │   ├── admin/        # Admin-only pages
-
-│   │   └── staff/        # Staff pages
-
-- [Frontend README](./frontend/README.md) - Detailed frontend documentation│   └── App.tsx            # Main application component
-
-- [Backend README](./backend/README.md) - Backend setup and API docs├── public/                # Static assets
-
-└── index.html            # HTML entry point
-
-## 🔐 Environment Variables```
-
-
-
-### Frontend## 🎨 Key Features Implemented
-
-No environment variables required - uses localStorage for data persistence.
-
-### ✅ Secure Authentication
-
-### Backend- Role-based access control (Admin/Staff)
-
-See `backend/agent-python` for required API keys and configuration.- Session management with localStorage
-
-- Protected routes
-
-## 🎯 Key Workflows
-
-### ✅ Appointment System
-
-1. **Patient Calls Clinic** → AI Agent answers → Books appointment → Syncs with frontend- Interactive calendar with month navigation
-
-2. **Staff Logs In** → Views calendar → Manages appointments → Updates knowledge base- Create, edit, cancel, and complete appointments
-
-3. **Admin Manages** → Creates staff accounts → Configures services → Reviews audit logs- Filter by doctor
-
-- Status badges and tracking
-
-## 📦 Deployment
-
-### ✅ Staff Account Management
-
-### Frontend- Custom permissions system
-
-```bash- Assign specific doctors to staff members
-
-cd frontend- Create/edit/delete staff accounts
-
-npm run build
-
-# Deploy dist/ folder to hosting service (Vercel, Netlify, etc.)### ✅ Provider Management
-
-```- Doctor profiles with bios and specializations
-
-- Weekly schedule editor
-
-### Backend- Contact information management
+#### 1️⃣ Clone the Repository
 
 ```bash
-
-cd backend/agent-python### ✅ Knowledge Base Editor
-
-# Follow backend deployment instructions- Category-based Q&A organization
-
-```- Search and filter functionality
-
-- Define exact AI responses
-
-## 👥 User Roles
-
-### ✅ Clinic Configuration
-
-- **Admin** - Full access to all features- Operating hours for all 7 days
-
-- **Staff** - Limited access based on assigned permissions- Contact information (address, phone, email)
-
-- Service catalog with durations
-
-## 🔄 Data Flow
-
-## 🔧 Available Scripts
-
+git clone https://github.com/abdulrehman-11/Docify.git
+cd Docify
 ```
 
-Phone Call → AI Agent (Backend) → API → Frontend Dashboard → Staff Action → Database Update → AI Agent Knowledge Base```sh
+#### 2️⃣ Frontend Setup
 
-```npm run dev          # Start development server
-
-npm run build        # Build for production
-
-## 🤝 Contributingnpm run build:dev    # Build in development mode
-
-npm run preview      # Preview production build
-
-This is a private project by **KhurramTheHexaa-tech**.npm run lint         # Run ESLint
-
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-## 📄 License
+The frontend will be available at **http://localhost:8080**
 
-## 📄 License
+**Default Admin Login:**
+- Email: `admin@clinic.com`
+- Password: `Admin123`
 
-Private and Proprietary
+#### 3️⃣ Backend API Setup
 
-This project is private and proprietary.
+```bash
+cd backend/api
 
-## 👤 Author
+# Install dependencies
+pip install -r requirements.txt
+pip install -r ../agent-python/requirements.txt
 
-## 👤 Author
+# Create .env.local file with your credentials
+# (See Environment Variables section below)
 
-**KhurramTheHexaa-tech**
+# Run the API server
+python main.py
+```
 
-**KhurramTheHexaa-tech**
+The API will be available at **http://localhost:8000**
+- API Docs: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+#### 4️⃣ AI Voice Agent Setup
+
+```bash
+cd backend/agent-python
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create .env.local file with LiveKit and OpenAI credentials
+# (See Environment Variables section below)
+
+# Run the agent
+python agent.py
+```
 
 ---
 
+## 📁 Project Structure
+
+```
+Docify/
+├── frontend/                      # React TypeScript frontend
+│   ├── src/
+│   │   ├── components/           # Reusable UI components
+│   │   │   ├── layout/          # DashboardLayout, Navbar, Sidebar
+│   │   │   ├── ui/              # shadcn/ui components
+│   │   │   └── ProtectedRoute.tsx
+│   │   ├── contexts/            # React context providers
+│   │   ├── hooks/               # Custom React hooks
+│   │   ├── lib/                 # Utilities and configurations
+│   │   │   ├── api/            # API client and types
+│   │   │   ├── auth.ts         # Authentication logic
+│   │   │   └── utils.ts        # Helper functions
+│   │   ├── pages/              # Page components
+│   │   │   ├── admin/          # Admin dashboard pages
+│   │   │   │   ├── AdminDashboard.tsx
+│   │   │   │   ├── Appointments.tsx
+│   │   │   │   ├── Patients.tsx
+│   │   │   │   ├── Providers.tsx
+│   │   │   │   ├── Staff.tsx
+│   │   │   │   ├── Clinic.tsx
+│   │   │   │   ├── Services.tsx
+│   │   │   │   ├── Knowledge.tsx
+│   │   │   │   └── Audit.tsx
+│   │   │   ├── staff/          # Staff dashboard pages
+│   │   │   │   ├── StaffDashboard.tsx
+│   │   │   │   └── Appointments.tsx
+│   │   │   ├── Landing.tsx
+│   │   │   ├── Login.tsx
+│   │   │   └── NotFound.tsx
+│   │   ├── App.tsx             # Main app component
+│   │   └── main.tsx            # Entry point
+│   ├── public/                 # Static assets
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.ts
+│   └── vercel.json            # Vercel deployment config
+│
+├── backend/
+│   ├── api/                    # FastAPI REST API server
+│   │   ├── routes/            # API route handlers
+│   │   │   ├── appointments.py
+│   │   │   ├── patients.py
+│   │   │   ├── staff.py
+│   │   │   └── clinic.py
+│   │   ├── api_services/      # Business logic layer
+│   │   │   ├── appointment_service.py
+│   │   │   ├── patient_service.py
+│   │   │   ├── staff_service.py
+│   │   │   ├── clinic_service.py
+│   │   │   └── calendar_sync_service.py
+│   │   ├── api_schemas/       # Pydantic schemas
+│   │   │   ├── appointment.py
+│   │   │   ├── patient.py
+│   │   │   ├── staff.py
+│   │   │   └── clinic.py
+│   │   ├── api_database.py    # Database connection
+│   │   ├── main.py            # FastAPI app entry
+│   │   ├── requirements.txt
+│   │   └── README.md
+│   │
+│   └── agent-python/          # AI Voice Agent (LiveKit)
+│       ├── tools/             # Tool handlers for AI agent
+│       │   ├── handlers.py    # Appointment booking logic
+│       │   ├── router.py      # Tool routing system
+│       │   ├── schemas.py     # Input/output schemas
+│       │   └── livekit_tools.py
+│       ├── services/          # Service layer
+│       │   ├── appointment_service.py
+│       │   ├── patient_service.py
+│       │   └── google_calendar_service.py
+│       ├── models/            # SQLAlchemy models
+│       │   ├── appointment.py
+│       │   ├── patient.py
+│       │   ├── staff.py
+│       │   └── clinic_hours.py
+│       ├── alembic/           # Database migrations
+│       ├── utils/             # Utility functions
+│       ├── agent.py           # Main agent entry point
+│       ├── database.py        # Database connection
+│       ├── requirements.txt
+│       ├── pyproject.toml
+│       └── README.md
+│
+├── render.yaml                # Render.com deployment config
+└── README.md                  # This file
+```
+
 ---
 
-Built with ❤️ for modern healthcare management
+## 🚢 Deployment
 
-Built with ❤️ for modern healthcare management
+### Frontend (Vercel)
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Configure build settings:
+   - **Root Directory**: `frontend`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+   - **Install Command**: `npm install`
+4. Deploy!
+
+The `vercel.json` file is already configured for SPA routing.
+
+### Backend API (Render)
+
+1. Create a new Web Service on Render
+2. Connect your GitHub repository
+3. Configure settings:
+   - **Root Directory**: `backend/api`
+   - **Build Command**: `pip install -r requirements.txt && pip install -r ../agent-python/requirements.txt`
+   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - **Environment**: Python 3.11
+4. Add environment variables (see below)
+5. Deploy!
+
+Alternatively, use the included `render.yaml` blueprint for one-click deployment.
+
+### AI Voice Agent (Render/Railway)
+
+1. Create a new Web Service
+2. Configure settings:
+   - **Root Directory**: `backend/agent-python`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `python agent.py`
+   - **Environment**: Python 3.11
+3. Add environment variables (see below)
+4. Deploy!
+
+---
+
+## 🔐 Environment Variables
+
+### Frontend
+No environment variables required. Authentication uses localStorage.
+
+### Backend API (`backend/api/.env.local`)
+
+```env
+# Database
+DATABASE_URL=postgresql+asyncpg://user:password@host/database
+
+# CORS
+ALLOWED_ORIGINS=https://your-frontend.vercel.app,http://localhost:8080
+
+# Google Calendar
+GOOGLE_SERVICE_ACCOUNT_JSON={"type": "service_account", ...}
+GOOGLE_CALENDAR_ID=your-calendar-id@gmail.com
+```
+
+### AI Voice Agent (`backend/agent-python/.env.local`)
+
+```env
+# Database
+DATABASE_URL=postgresql+asyncpg://user:password@host/database
+
+# LiveKit
+LIVEKIT_URL=wss://your-livekit-instance.livekit.cloud
+LIVEKIT_API_KEY=your_livekit_api_key
+LIVEKIT_API_SECRET=your_livekit_api_secret
+
+# OpenAI
+OPENAI_API_KEY=sk-your-openai-key
+
+# Deepgram (optional)
+DEEPGRAM_API_KEY=your_deepgram_key
+
+# ElevenLabs (optional)
+ELEVENLABS_API_KEY=your_elevenlabs_key
+
+# Google Calendar
+GOOGLE_SERVICE_ACCOUNT_JSON={"type": "service_account", ...}
+GOOGLE_CALENDAR_ID=your-calendar-id@gmail.com
+```
+
+---
+
+## 📚 API Documentation
+
+Once the backend is running, visit:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+### Key Endpoints
+
+#### Appointments
+- `GET /appointments` - List all appointments
+- `POST /appointments` - Create appointment
+- `PUT /appointments/{id}` - Update appointment
+- `DELETE /appointments/{id}` - Delete appointment
+
+#### Patients
+- `GET /patients` - List all patients
+- `POST /patients` - Create patient
+- `PUT /patients/{id}` - Update patient
+- `DELETE /patients/{id}` - Delete patient
+
+#### Staff
+- `GET /staff` - List all staff
+- `POST /staff` - Create staff account
+- `PUT /staff/{id}` - Update staff
+- `DELETE /staff/{id}` - Delete staff
+
+#### Clinic
+- `GET /clinic/hours` - Get clinic hours
+- `PUT /clinic/hours` - Update clinic hours
+- `GET /clinic/info` - Get clinic information
+- `PUT /clinic/info` - Update clinic info
+
+#### Calendar Sync
+- `POST /calendar/sync` - Manual sync trigger
+- `GET /calendar/status` - Check sync status
+
+---
+
+## 🤝 Contributing
+
+This is a private project by **abdulrehman-11**. For inquiries, please contact the repository owner.
+
+---
+
+## 📄 License
+
+Private and Proprietary. All rights reserved.
+
+---
+
+## 👤 Author
+
+**Abdul Rehman** ([@abdulrehman-11](https://github.com/abdulrehman-11))
+
+---
+
+## 🙏 Acknowledgments
+
+- Built with [LiveKit](https://livekit.io/) for real-time voice
+- Powered by [OpenAI](https://openai.com/) GPT-4
+- UI components by [shadcn/ui](https://ui.shadcn.com/)
+- Hosted on [Vercel](https://vercel.com/) and [Render](https://render.com/)
+
+---
+
+<div align="center">
+
+**Built with ❤️ for modern healthcare management**
+
+⭐ Star this repo if you find it helpful!
+
+</div>
 
