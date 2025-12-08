@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_,func
+from sqlalchemy.orm import selectinload
 from models.appointment import Appointment, AppointmentStatus
 from models.clinic_hours import ClinicHours, ClinicHoliday
 from models.patient import Patient
@@ -70,48 +71,70 @@ class AppointmentService:
         Returns:
             List of available slots with start/end times
         """
+        # ⚡ OPTIMIZATION: Batch all database queries upfront (3 queries instead of 21+)
+        logger.info(f"🔍 Fetching availability data (batched queries)...")
+        
+        # Query 1: Get all clinic hours once (instead of per-day queries)
+        all_clinic_hours = await self.get_all_clinic_hours()
+        hours_by_day = {h.day_of_week: h for h in all_clinic_hours}
+        
+        # Query 2: Get all holidays once
+        all_holidays = await self.get_all_holidays()
+        holidays_by_date = {h.date: h for h in all_holidays}
+        
+        # Query 3: Get all booked slots for the entire date range once
+        all_booked_slots = await self._get_booked_slots_range(
+            start_date.replace(hour=0, minute=0, second=0, microsecond=0),
+            end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        )
+        
+        logger.info(f"✅ Data fetched: {len(hours_by_day)} clinic hour configs, {len(holidays_by_date)} holidays, {len(all_booked_slots)} booked slots")
+        
+        # Now process in-memory (no more database queries)
         available_slots = []
         current_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
 
         while current_date <= end_date:
-            # Check if this date is a holiday
-            holiday = await self.get_holiday(current_date.date())
+            # Check if this date is a holiday (from cached data)
+            holiday = holidays_by_date.get(current_date.date())
             if holiday:
                 if holiday.is_full_day:
                     # Full day holiday - skip entire day
-                    logger.info(f"Skipping {current_date.date()} - holiday: {holiday.name}")
+                    logger.debug(f"Skipping {current_date.date()} - holiday: {holiday.name}")
                     current_date += timedelta(days=1)
                     continue
                 else:
                     # Partial day holiday with custom hours
                     if holiday.start_time and holiday.end_time:
                         # Generate slots only for custom hours on holiday
-                        day_slots = await self._generate_slots_for_day(
+                        day_slots = self._generate_slots_for_day_inmemory(
                             current_date,
                             holiday.start_time,
                             holiday.end_time,
-                            break_start=None,  # No break on holiday custom hours
-                            break_end=None
+                            break_start=None,
+                            break_end=None,
+                            booked_slots=all_booked_slots
                         )
                         available_slots.extend(day_slots)
                         current_date += timedelta(days=1)
                         continue
 
             day_of_week = current_date.weekday()  # 0=Monday
-            clinic_hours = await self.get_clinic_hours(day_of_week)
+            clinic_hours = hours_by_day.get(day_of_week)
 
-            if not clinic_hours:
+            if not clinic_hours or not clinic_hours.is_active:
                 # Clinic closed on this day
                 current_date += timedelta(days=1)
                 continue
 
-            # Generate slots for this day, excluding break time
-            day_slots = await self._generate_slots_for_day(
+            # Generate slots for this day, excluding break time (using cached booked slots)
+            day_slots = self._generate_slots_for_day_inmemory(
                 current_date,
                 clinic_hours.start_time,
                 clinic_hours.end_time,
                 break_start=clinic_hours.break_start,
-                break_end=clinic_hours.break_end
+                break_end=clinic_hours.break_end,
+                booked_slots=all_booked_slots
             )
             available_slots.extend(day_slots)
             current_date += timedelta(days=1)
@@ -122,7 +145,7 @@ class AppointmentService:
             if start_date <= datetime.fromisoformat(slot["start"]) <= end_date
         ]
 
-        logger.info(f"Found {len(filtered_slots)} available slots between {start_date} and {end_date}")
+        logger.info(f"✅ Found {len(filtered_slots)} available slots between {start_date.date()} and {end_date.date()}")
         return filtered_slots
 
     async def _generate_slots_for_day(
@@ -202,6 +225,18 @@ class AppointmentService:
         result = await self.session.execute(stmt)
         return [(row[0], row[1]) for row in result.all()]
 
+    async def _get_booked_slots_range(self, start_date: datetime, end_date: datetime) -> list[tuple[datetime, datetime]]:
+        """⚡ OPTIMIZED: Get all booked appointment slots for entire date range in ONE query."""
+        stmt = select(Appointment.start_time, Appointment.end_time).where(
+            and_(
+                Appointment.start_time >= start_date,
+                Appointment.start_time <= end_date,
+                Appointment.status == AppointmentStatus.CONFIRMED
+            )
+        )
+        result = await self.session.execute(stmt)
+        return [(row[0], row[1]) for row in result.all()]
+
     def _slots_overlap(
         self,
         start1: datetime,
@@ -211,6 +246,69 @@ class AppointmentService:
     ) -> bool:
         """Check if two time slots overlap."""
         return start1 < end2 and end1 > start2
+
+    def _generate_slots_for_day_inmemory(
+        self,
+        date: datetime,
+        clinic_start: time,
+        clinic_end: time,
+        break_start: time | None = None,
+        break_end: time | None = None,
+        booked_slots: list[tuple[datetime, datetime]] = None
+    ) -> list[dict[str, str]]:
+        """⚡ OPTIMIZED: Generate slots using pre-fetched booked_slots (no database query)."""
+        slots = []
+        current_time = datetime.combine(date.date(), clinic_start)
+        end_time = datetime.combine(date.date(), clinic_end)
+
+        # Create break time datetime objects if break times exist
+        break_start_dt = None
+        break_end_dt = None
+        if break_start and break_end:
+            break_start_dt = datetime.combine(date.date(), break_start)
+            break_end_dt = datetime.combine(date.date(), break_end)
+            if date.tzinfo is not None:
+                break_start_dt = break_start_dt.replace(tzinfo=date.tzinfo)
+                break_end_dt = break_end_dt.replace(tzinfo=date.tzinfo)
+
+        # Preserve timezone info if date has it
+        if date.tzinfo is not None:
+            current_time = current_time.replace(tzinfo=date.tzinfo)
+            end_time = end_time.replace(tzinfo=date.tzinfo)
+
+        # Don't allow booking slots in the past
+        now = datetime.now(current_time.tzinfo) if current_time.tzinfo else datetime.now()
+        if current_time < now:
+            current_time = now
+
+        # Use pre-fetched booked slots (already in memory)
+        if booked_slots is None:
+            booked_slots = []
+
+        while current_time + timedelta(minutes=self.SLOT_DURATION_MINUTES) <= end_time:
+            slot_start = current_time
+            slot_end = current_time + timedelta(minutes=self.SLOT_DURATION_MINUTES)
+
+            # Check if slot overlaps with break time
+            is_during_break = False
+            if break_start_dt and break_end_dt:
+                is_during_break = self._slots_overlap(slot_start, slot_end, break_start_dt, break_end_dt)
+
+            # Check if slot overlaps with any booked appointment (from pre-fetched list)
+            is_booked = any(
+                self._slots_overlap(slot_start, slot_end, booked_start, booked_end)
+                for booked_start, booked_end in booked_slots
+            )
+
+            if not is_during_break and not is_booked:
+                slots.append({
+                    "start": slot_start.isoformat(),
+                    "end": slot_end.isoformat()
+                })
+
+            current_time = slot_end
+
+        return slots
 
     async def book_appointment(
         self,
@@ -326,19 +424,25 @@ class AppointmentService:
         new_start_time: datetime,
         new_end_time: datetime
     ) -> Appointment:
-        """
-        Reschedule appointment atomically (cancel old + book new).
-        Uses transaction to ensure consistency.
-        """
-        # Get and lock old appointment
-        stmt = select(Appointment).where(Appointment.id == appointment_id).with_for_update()
+       
+        stmt = (
+            select(Appointment)
+            .options(selectinload(Appointment.patient))
+            .where(Appointment.id == appointment_id)
+            .with_for_update()
+        )
         result = await self.session.execute(stmt)
         old_appointment = result.scalar_one_or_none()
 
         if not old_appointment:
             raise ValueError(f"Appointment {appointment_id} not found")
 
-        # Check new slot availability
+        # Store info about cancelled status
+        was_cancelled = old_appointment.status == AppointmentStatus.CANCELLED
+        if was_cancelled:
+            logger.info(f"Rescheduling cancelled appointment {appointment_id} - will reactivate")
+
+        # Check new slot availability (exclude the old appointment and only check confirmed ones)
         stmt = select(Appointment).where(
             and_(
                 Appointment.id != appointment_id,  # Exclude current appointment
@@ -357,36 +461,37 @@ class AppointmentService:
         # Store old calendar event ID
         old_calendar_event_id = old_appointment.google_calendar_event_id
 
-        # Mark old as rescheduled
+        # Mark old as rescheduled (even if it was cancelled)
         old_appointment.status = AppointmentStatus.RESCHEDULED
 
-        # Get patient for calendar event
-        patient_stmt = select(Patient).where(Patient.id == old_appointment.patient_id)
-        patient_result = await self.session.execute(patient_stmt)
-        patient = patient_result.scalar_one_or_none()
+        # Get patient (already loaded via selectinload above)
+        patient = old_appointment.patient
 
-        # Create new appointment
+        # Create new appointment (always with CONFIRMED status - this reactivates cancelled ones)
         new_appointment = Appointment(
             patient_id=old_appointment.patient_id,
             start_time=new_start_time,
             end_time=new_end_time,
             reason=old_appointment.reason,
-            status=AppointmentStatus.CONFIRMED
+            status=AppointmentStatus.CONFIRMED  # Always confirmed, even if old was cancelled
         )
         self.session.add(new_appointment)
         await self.session.flush()
         
-        # Handle Google Calendar - delete old event and create new one
+        # Handle Google Calendar
         if CALENDAR_AVAILABLE and patient:
             try:
                 calendar_service = get_calendar_service()
                 
-                # Delete old event if exists
+                # Delete old event if it exists (may not exist for cancelled appointments)
                 if old_calendar_event_id:
-                    calendar_service.delete_event(old_calendar_event_id)
-                    logger.info(f"Deleted old calendar event {old_calendar_event_id}")
+                    deleted = calendar_service.delete_event(old_calendar_event_id)
+                    if deleted:
+                        logger.info(f"Deleted old calendar event {old_calendar_event_id}")
+                    else:
+                        logger.warning(f"Could not delete old calendar event {old_calendar_event_id}")
                 
-                # Create new calendar event
+                # Always create new calendar event for rescheduled appointment
                 event_id = calendar_service.create_event(
                     patient_name=patient.name,
                     patient_email=patient.email,
@@ -399,25 +504,110 @@ class AppointmentService:
                 if event_id:
                     new_appointment.google_calendar_event_id = event_id
                     await self.session.flush()
-                    logger.info(f"Created calendar event {event_id} for rescheduled appointment {new_appointment.id}")
+                    logger.info(f"Created calendar event {event_id} for {'reactivated' if was_cancelled else 'rescheduled'} appointment {new_appointment.id}")
             except Exception as e:
                 logger.error(f"Failed to update calendar for reschedule: {e}")
         
-        logger.info(f"Rescheduled appointment {appointment_id} to new appointment {new_appointment.id}")
+        action = "Reactivated and rescheduled" if was_cancelled else "Rescheduled"
+        logger.info(f"{action} appointment {appointment_id} to new appointment {new_appointment.id}")
         return new_appointment
 
     async def find_appointment(
         self,
         patient_name: str,
-        start_time: datetime
+        start_time: datetime,
+        include_cancelled: bool = False
     ) -> Appointment | None:
-        """Find appointment by patient name and start time."""
-        stmt = select(Appointment).join(Patient).where(
-            and_(
-                Patient.name == patient_name,
-                Appointment.start_time == start_time,
-                Appointment.status == AppointmentStatus.CONFIRMED
-            )
+        """
+        Find appointment by patient name and start time.
+        
+        Args:
+            patient_name: Name of the patient
+            start_time: Start time of the appointment
+            include_cancelled: If True, includes cancelled and rescheduled appointments in search
+        
+        Returns:
+            Appointment if found, None otherwise
+        """
+        conditions = [
+            Patient.name == patient_name,
+            Appointment.start_time == start_time,
+        ]
+        
+        if not include_cancelled:
+            conditions.append(Appointment.status == AppointmentStatus.CONFIRMED)
+        
+        stmt = (
+            select(Appointment)
+            .options(selectinload(Appointment.patient))
+            .join(Patient)
+            .where(and_(*conditions))
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_appointments_for_patient(
+        self,
+        patient_name: str,
+        from_time: datetime | None = None,
+        include_cancelled: bool = False
+    ) -> list[Appointment]:
+        """
+        Get appointments for patient, optionally including cancelled ones.
+        
+        Args:
+            patient_name: Name of the patient
+            from_time: Only return appointments starting from this time (optional)
+            include_cancelled: If True, includes cancelled and rescheduled appointments
+        
+        Returns:
+            List of appointments sorted by start time
+        """
+        if from_time is None:
+            from_time = datetime.utcnow()
+        
+        conditions = [
+            func.lower(Patient.name) == patient_name.strip().lower(),
+            Appointment.start_time >= from_time,
+        ]
+        
+        if not include_cancelled:
+            conditions.append(Appointment.status == AppointmentStatus.CONFIRMED)
+        
+        stmt = (
+            select(Appointment)
+            .options(selectinload(Appointment.patient))
+            .join(Patient)
+            .where(and_(*conditions))
+            .order_by(Appointment.start_time.asc())
+        )
+        
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def get_upcoming_appointments_for_patient(
+        self,
+        patient_name: str,
+        from_time: datetime | None = None,
+    ) -> list[Appointment]:
+        """Return all future confirmed appointments for a patient from from_time onwards."""
+        if from_time is None:
+            # Use UTC "now" so comparison with stored timestamps is consistent
+            from_time = datetime.utcnow()
+
+        stmt = (
+            select(Appointment)
+            .join(Patient)
+            .where(
+                and_(
+                    # Case-insensitive, trimmed name match to handle spelling/capitalization
+                    func.lower(Patient.name) == patient_name.strip().lower(),
+                    Appointment.start_time >= from_time,
+                    Appointment.status == AppointmentStatus.CONFIRMED,
+                )
+            )
+            .order_by(Appointment.start_time.asc())
+        )
+
+        result = await self.session.execute(stmt)
+        return result.scalars().all()

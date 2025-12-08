@@ -5,11 +5,13 @@ from .schemas import (
   BookAppointmentInput, BookAppointmentOutput,
   CancelAppointmentInput, CancelAppointmentOutput,
   RescheduleAppointmentInput, RescheduleAppointmentOutput,
+  GetUpcomingAppointmentsInput, GetUpcomingAppointmentsOutput,
   GetHoursInput, GetHoursOutput,
   GetLocationInput, GetLocationOutput,
   GetInsuranceSupportedInput, GetInsuranceSupportedOutput,
   EscalateToHumanInput, EscalateToHumanOutput,
   SendConfirmationInput, SendConfirmationOutput,
+  LookupAppointmentInput, LookupAppointmentOutput, AppointmentInfo,
 )
 from .router import ToolRouter
 from datetime import datetime, timedelta
@@ -30,26 +32,42 @@ def set_session_factory(factory):
 
 async def check_availability(i: CheckAvailabilityInput) -> CheckAvailabilityOutput:
   """Check available appointment slots within time window."""
-  logger.info("Executing check_availability handler")
+  logger.info("="*60)
+  logger.info("🔍 EXECUTING check_availability handler")
+  logger.info(f"📅 Reason: {i.reason}")
+  
   async with _session_factory() as session:
     service = AppointmentService(session)
 
     # Parse preferred time window
     start_time = datetime.fromisoformat(i.preferred_time_window.from_.replace("Z", "+00:00"))
     end_time = datetime.fromisoformat(i.preferred_time_window.to.replace("Z", "+00:00"))
+    
+    logger.info(f"⏰ Checking from: {start_time.strftime('%Y-%m-%d %H:%M')}")
+    logger.info(f"⏰ Checking to:   {end_time.strftime('%Y-%m-%d %H:%M')}")
 
+    # TIME THIS OPERATION
+    import time as time_module
+    start = time_module.time()
+    
     slots = await service.check_availability(start_time, end_time)
-    logger.info(f"Found {len(slots)} available slots for '{i.reason}'")
+    
+    elapsed = time_module.time() - start
+    logger.info(f"⚡ Database query took: {elapsed*1000:.0f}ms")
+    logger.info(f"✅ Found {len(slots)} available slots")
 
-    # Debug logging: Show slot times in readable format for troubleshooting
+    # Debug logging: Show slot times in readable format
     if slots:
-      slot_times = [slot["start"][11:16] for slot in slots[:5]]  # Show first 5 times (HH:MM format)
-      logger.info(f"Sample slot times (HH:MM): {', '.join(slot_times)}")
+      slot_times = [slot["start"][11:16] for slot in slots[:5]]
+      logger.info(f"📋 Sample slots (HH:MM): {', '.join(slot_times)}")
+    else:
+      logger.warning("⚠️  NO SLOTS FOUND - Day might be fully booked or outside clinic hours")
+    
+    logger.info("="*60)
 
     return CheckAvailabilityOutput(slots=[
       Slot(start=slot["start"], end=slot["end"]) for slot in slots
     ])
-
 
 async def book_appointment(i: BookAppointmentInput) -> BookAppointmentOutput:
   """Book appointment with conflict detection and Google Calendar integration."""
@@ -109,6 +127,50 @@ async def book_appointment(i: BookAppointmentInput) -> BookAppointmentOutput:
       logger.error(f"Unexpected error during booking: {e}")
       raise
 
+async def lookup_appointment(i: LookupAppointmentInput) -> LookupAppointmentOutput:
+  """Lookup appointments by patient name and optional date for verification before cancel/reschedule.
+  
+  Returns appointments with ANY status (confirmed, cancelled, completed) to allow operations on cancelled appointments.
+  """
+  logger.info(f"Executing lookup_appointment handler for patient: {i.name}")
+  async with _session_factory() as session:
+    appointment_service = AppointmentService(session)
+    
+    # Parse date if provided
+    target_date = None
+    if i.date:
+      try:
+        target_date = datetime.fromisoformat(i.date.replace("Z", "+00:00"))
+      except ValueError:
+        logger.warning(f"Invalid date format: {i.date}")
+    
+    # Find appointments (including cancelled ones)
+    if target_date:
+      # Look for specific appointment on this date (any status)
+      appointment = await appointment_service.find_appointment(i.name, target_date, include_cancelled=True)
+      appointments = [appointment] if appointment else []
+    else:
+      # Get all appointments for this patient (including cancelled)
+      now = datetime.now()
+      appointments = await appointment_service.get_appointments_for_patient(i.name, now, include_cancelled=True)
+    
+    # Convert to output format
+    appointment_infos = []
+    for appt in appointments:
+      appointment_infos.append(AppointmentInfo(
+        appointment_id=appt.id,
+        patient_name=appt.patient.name,
+        start_time=appt.start_time.isoformat(),
+        end_time=appt.end_time.isoformat(),
+        reason=appt.reason,
+        status=appt.status
+      ))
+    
+    logger.info(f"Found {len(appointment_infos)} appointments (all statuses) for {i.name}")
+    return LookupAppointmentOutput(
+      appointments=appointment_infos,
+      count=len(appointment_infos)
+    )
 
 async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutput:
   """Cancel appointment by patient name and time, and remove from Google Calendar."""
@@ -121,7 +183,20 @@ async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutp
     appointment = await appointment_service.find_appointment(i.name, start_time)
 
     if not appointment:
-      raise ValueError(f"No appointment found for {i.name} at {i.slot_start}")
+      # Provide helpful error message
+      logger.warning(f"No appointment found for {i.name} at {i.slot_start}")
+      
+      # Try to find ANY appointments for this patient to help debug
+      now = datetime.now()
+      all_appointments = await appointment_service.get_upcoming_appointments_for_patient(i.name, now)
+      
+      if all_appointments:
+        found_times = [appt.start_time.isoformat() for appt in all_appointments[:3]]
+        error_msg = f"No appointment found for {i.name} at {i.slot_start}. Found {len(all_appointments)} other appointments: {', '.join(found_times)}"
+      else:
+        error_msg = f"No appointment found for {i.name} at {i.slot_start}. No appointments found for this patient."
+      
+      raise ValueError(error_msg)
 
     # Store calendar event ID before canceling
     calendar_event_id = appointment.google_calendar_event_id
@@ -147,95 +222,77 @@ async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutp
     logger.info(f"Cancelled appointment {appointment.id}")
     return CancelAppointmentOutput(status="cancelled")
 
-
 async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleAppointmentOutput:
-  """Reschedule appointment to new time and update Google Calendar."""
+  """Reschedule appointment to new time and update Google Calendar.
+  
+  Now supports rescheduling cancelled appointments by reactivating them with new times.
+  """
   logger.info("Executing reschedule_appointment handler")
   async with _session_factory() as session:
     appointment_service = AppointmentService(session)
 
-    # Find current appointment
+    # Find current appointment (including cancelled ones)
     current_start = datetime.fromisoformat(i.current_slot_start.replace("Z", "+00:00"))
-    appointment = await appointment_service.find_appointment(i.name, current_start)
+    appointment = await appointment_service.find_appointment(i.name, current_start, include_cancelled=True)
 
     if not appointment:
-      raise ValueError(f"No appointment found for {i.name} at {i.current_slot_start}")
+      logger.warning(f"Exact appointment not found for {i.name} at {i.current_slot_start}. Searching for any appointments...")
+      # Try to find any appointment for this patient (including cancelled)
+      all_appointments = await appointment_service.get_appointments_for_patient(i.name, include_cancelled=True)
+      if not all_appointments:
+        logger.error(f"No appointments found for {i.name}")
+        raise ValueError(f"No appointment found for {i.name} at {i.current_slot_start} and no other appointments to reschedule")
+      # Use the first appointment as fallback
+      appointment = all_appointments[0]
+      logger.info(f"Using appointment for {i.name} at {appointment.start_time} (status: {appointment.status}) as fallback")
 
-    # Store old calendar event ID
-    old_calendar_event_id = appointment.google_calendar_event_id
+    # Check if appointment is cancelled
+    is_cancelled = appointment.status == "cancelled"
+    if is_cancelled:
+      logger.info(f"Rescheduling CANCELLED appointment {appointment.id} - will reactivate it")
 
-    # Get patient info for calendar event
-    patient = appointment.patient
-
-    # Reschedule atomically
+    # Parse new times
     new_start = datetime.fromisoformat(i.new_slot_start.replace("Z", "+00:00"))
     new_end = datetime.fromisoformat(i.new_slot_end.replace("Z", "+00:00"))
+    
+    logger.info(f"Rescheduling appointment {appointment.id} from {appointment.start_time.isoformat()} to {new_start.isoformat()}")
+    
+    # Call the service's reschedule method (it already handles calendar)
     new_appointment = await appointment_service.reschedule_appointment(
       appointment_id=appointment.id,
       new_start_time=new_start,
       new_end_time=new_end
     )
-    await session.commit()
-
-    # Handle Google Calendar update
-    calendar_service = get_calendar_service()
     
-    if old_calendar_event_id:
-      # Update the existing calendar event with new times
-      updated = calendar_service.update_event(
-        event_id=old_calendar_event_id,
-        patient_name=patient.name,
-        patient_email=patient.email,
-        patient_phone=patient.phone,
-        reason=new_appointment.reason,
-        start_time=new_start,
-        end_time=new_end,
-        appointment_id=new_appointment.id
-      )
-      
-      if updated:
-        # Transfer the calendar event ID to new appointment
-        new_appointment.google_calendar_event_id = old_calendar_event_id
-        await session.commit()
-        logger.info(f"Updated calendar event {old_calendar_event_id} for rescheduled appointment")
-      else:
-        # Create a new event if update failed
-        logger.warning(f"Failed to update calendar event, creating new one")
-        new_event_id = calendar_service.create_event(
-          patient_name=patient.name,
-          patient_email=patient.email,
-          patient_phone=patient.phone,
-          reason=new_appointment.reason,
-          start_time=new_start,
-          end_time=new_end,
-          appointment_id=new_appointment.id
-        )
-        if new_event_id:
-          new_appointment.google_calendar_event_id = new_event_id
-          await session.commit()
-    else:
-      # No existing calendar event, create new one
-      new_event_id = calendar_service.create_event(
-        patient_name=patient.name,
-        patient_email=patient.email,
-        patient_phone=patient.phone,
-        reason=new_appointment.reason,
-        start_time=new_start,
-        end_time=new_end,
-        appointment_id=new_appointment.id
-      )
-      if new_event_id:
-        new_appointment.google_calendar_event_id = new_event_id
-        await session.commit()
-        logger.info(f"Created new calendar event {new_event_id} for rescheduled appointment")
+    await session.commit()
+    logger.info(f"Successfully rescheduled to new appointment {new_appointment.id} at {new_appointment.start_time.isoformat()}")
 
     new_confirmation_id = f"cnf_{new_appointment.id}_{int(datetime.now().timestamp())}"
-    logger.info(f"Rescheduled appointment {appointment.id} to {new_appointment.id}")
+    
+    status_message = "reactivated and rescheduled" if is_cancelled else "rescheduled"
+    logger.info(f"{status_message.capitalize()} appointment {appointment.id} to {new_appointment.id}")
 
     return RescheduleAppointmentOutput(
-      status="rescheduled",
+      status=status_message,
       new_confirmation_id=new_confirmation_id
     )
+
+
+async def get_upcoming_appointments(i: GetUpcomingAppointmentsInput) -> GetUpcomingAppointmentsOutput:
+  """Get all upcoming confirmed appointments for a patient from now onward."""
+  logger.info("Executing get_upcoming_appointments handler")
+  async with _session_factory() as session:
+    service = AppointmentService(session)
+
+    now = datetime.now()
+    appointments = await service.get_upcoming_appointments_for_patient(i.name, now)
+
+    slots: list[Slot] = []
+    for appt in appointments:
+      slots.append(Slot(start=appt.start_time.isoformat(), end=appt.end_time.isoformat()))
+
+    logger.info(f"Found {len(slots)} upcoming appointments for {i.name}")
+    return GetUpcomingAppointmentsOutput(slots=slots)
 
 
 async def get_hours(i: GetHoursInput) -> GetHoursOutput:
@@ -317,13 +374,14 @@ def register_handlers(router: ToolRouter, session_factory=None) -> None:
 
   router.register("check_availability", CheckAvailabilityInput, CheckAvailabilityOutput, check_availability)
   router.register("book_appointment", BookAppointmentInput, BookAppointmentOutput, book_appointment)
+  router.register("lookup_appointment", LookupAppointmentInput, LookupAppointmentOutput, lookup_appointment)
   router.register("cancel_appointment", CancelAppointmentInput, CancelAppointmentOutput, cancel_appointment)
   router.register("reschedule_appointment", RescheduleAppointmentInput, RescheduleAppointmentOutput, reschedule_appointment)
+  router.register("get_upcoming_appointments", GetUpcomingAppointmentsInput, GetUpcomingAppointmentsOutput, get_upcoming_appointments)
   router.register("get_hours", GetHoursInput, GetHoursOutput, get_hours)
   router.register("get_location", GetLocationInput, GetLocationOutput, get_location)
   router.register("get_insurance_supported", GetInsuranceSupportedInput, GetInsuranceSupportedOutput, get_insurance_supported)
   router.register("escalate_to_human", EscalateToHumanInput, EscalateToHumanOutput, escalate_to_human)
   router.register("send_confirmation", SendConfirmationInput, SendConfirmationOutput, send_confirmation)
 
-  logger.info("Registered 9 appointment handlers with database integration")
-
+  logger.info("Registered 11 appointment handlers with database integration")

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, Field
 from typing import List, Literal, Optional
 from datetime import datetime
 import sys
@@ -15,8 +15,12 @@ def ensure_iso8601(value: str) -> str:
   return value
 
 
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+
 class TimeWindow(BaseModel):
-  from_: str
+  model_config = ConfigDict(populate_by_name=True)  # Allow both 'from' and 'from_'
+  
+  from_: str = Field(..., alias="from")  # Accept 'from' in JSON, store as 'from_'
   to: str
 
   @field_validator("from_", mode="before")
@@ -156,6 +160,14 @@ class RescheduleAppointmentOutput(BaseModel):
   new_confirmation_id: str
 
 
+class GetUpcomingAppointmentsInput(BaseModel):
+  name: str
+
+
+class GetUpcomingAppointmentsOutput(BaseModel):
+  slots: List[Slot]
+
+
 class GetHoursInput(BaseModel):
   pass
 
@@ -199,3 +211,21 @@ class SendConfirmationOutput(BaseModel):
   status: Literal["sent"]
 
 
+class LookupAppointmentInput(BaseModel):
+    """Input for looking up appointments by patient name and optional date."""
+    name: str = Field(..., description="Patient's full name to search for")
+    date: Optional[str] = Field(None, description="Optional: ISO8601 date to filter appointments (e.g., 2025-12-26). If not provided, returns all appointments for this patient.")
+
+class AppointmentInfo(BaseModel):
+    """Information about a single appointment."""
+    appointment_id: int
+    patient_name: str
+    start_time: str  # ISO8601
+    end_time: str    # ISO8601
+    reason: str
+    status: str
+
+class LookupAppointmentOutput(BaseModel):
+    """Output containing found appointments."""
+    appointments: List[AppointmentInfo] = Field(default_factory=list, description="List of appointments found")
+    count: int = Field(..., description="Total number of appointments found")

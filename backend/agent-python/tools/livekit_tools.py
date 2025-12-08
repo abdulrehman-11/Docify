@@ -179,6 +179,30 @@ def create_livekit_tools(router):
 
     @function_tool(
         raw_schema={
+            "name": "get_upcoming_appointments",
+            "description": "Get all upcoming confirmed appointments for a patient starting from now. Use this when the caller asks about their upcoming or future appointments.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Full name of the patient"
+                    }
+                },
+                "required": ["name"],
+                "additionalProperties": False
+            }
+        }
+    )
+    async def get_upcoming_appointments(raw_arguments: dict):
+        """Get upcoming confirmed appointments for a patient."""
+        logger.info("LiveKit calling get_upcoming_appointments")
+        return await router.dispatch("get_upcoming_appointments", {
+            "name": raw_arguments["name"],
+        })
+
+    @function_tool(
+        raw_schema={
             "name": "get_hours",
             "description": "Get clinic operating hours",
             "parameters": {
@@ -303,6 +327,7 @@ def create_livekit_tools(router):
         book_appointment,
         cancel_appointment,
         reschedule_appointment,
+        get_upcoming_appointments,
         get_hours,
         get_location,
         get_insurance_supported,
