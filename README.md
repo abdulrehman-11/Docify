@@ -1,4 +1,4 @@
-# 🏥 Docify - AI-Powered Clinic Management System
+# Docify - AI-Powered Clinic Management System
 
 A comprehensive full-stack clinic management platform featuring an intelligent AI voice calling agent, web-based dashboard, and seamless Google Calendar integration. Built with React, FastAPI, LiveKit, and OpenAI.
 
@@ -10,7 +10,7 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#-overview)
 - [Key Features](#-key-features)
@@ -18,7 +18,6 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
 - [Project Structure](#-project-structure)
-- [Deployment](#-deployment)
 - [Environment Variables](#-environment-variables)
 - [API Documentation](#-api-documentation)
 - [Contributing](#-contributing)
@@ -26,7 +25,7 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
 
 ---
 
-## 🎯 Overview
+## Overview
 
 **Docify** is an enterprise-grade clinic management system designed for healthcare providers. It combines three powerful components:
 
@@ -46,9 +45,9 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🎙️ AI Voice Agent (LiveKit + OpenAI)
+### AI Voice Agent (LiveKit + OpenAI)
 - **Natural Conversations**: GPT-4 powered voice assistant that understands patient requests
 - **Appointment Booking**: Automated scheduling with slot availability checking
 - **Appointment Management**: Cancel and reschedule existing appointments via phone
@@ -57,7 +56,7 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
 - **Google Calendar Integration**: Real-time sync of all phone-booked appointments
 - **Database Persistence**: All appointments stored in PostgreSQL
 
-### 💻 Web Dashboard (React + TypeScript)
+### Web Dashboard (React + TypeScript)
 
 #### Admin Features
 - **Dashboard Overview**: Real-time statistics and appointment metrics
@@ -93,13 +92,13 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
 - **Permission-Based Access**: Custom permissions control available actions
 - **Appointment Management**: Based on assigned permissions
 
-### 📅 Calendar Integration
+### Calendar Integration
 - **Two-Way Sync**: Changes in dashboard or Google Calendar reflect instantly
 - **Auto-Sync Service**: Background task syncs every 5 minutes
 - **Conflict Detection**: Prevents double-booking
 - **Event Formatting**: Professional event titles with patient info
 
-### 🔐 Security & Authentication
+### Security & Authentication
 - **Role-Based Access Control (RBAC)**: Admin and Staff roles with different permissions
 - **Protected Routes**: Frontend route guards for authorized access
 - **Session Management**: Secure authentication with localStorage
@@ -107,7 +106,7 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -162,7 +161,7 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ### Frontend
 | Technology | Version | Purpose |
@@ -213,7 +212,7 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -245,9 +244,6 @@ npm run dev
 
 The frontend will be available at **http://localhost:8080**
 
-**Default Admin Login:**
-- Email: `admin@clinic.com`
-- Password: `Admin123`
 
 #### 3️⃣ Backend API Setup
 
@@ -380,48 +376,6 @@ Docify/
 
 ---
 
-## 🚢 Deployment
-
-### Frontend (Vercel)
-
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Configure build settings:
-   - **Root Directory**: `frontend`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-   - **Install Command**: `npm install`
-4. Deploy!
-
-The `vercel.json` file is already configured for SPA routing.
-
-### Backend API (Render)
-
-1. Create a new Web Service on Render
-2. Connect your GitHub repository
-3. Configure settings:
-   - **Root Directory**: `backend/api`
-   - **Build Command**: `pip install -r requirements.txt && pip install -r ../agent-python/requirements.txt`
-   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-   - **Environment**: Python 3.11
-4. Add environment variables (see below)
-5. Deploy!
-
-Alternatively, use the included `render.yaml` blueprint for one-click deployment.
-
-### AI Voice Agent (Render/Railway)
-
-1. Create a new Web Service
-2. Configure settings:
-   - **Root Directory**: `backend/agent-python`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `python agent.py`
-   - **Environment**: Python 3.11
-3. Add environment variables (see below)
-4. Deploy!
-
----
-
 ## 🔐 Environment Variables
 
 ### Frontend
@@ -508,7 +462,7 @@ Once the backend is running, visit:
 
 ## 🤝 Contributing
 
-This is a private project by **abdulrehman-11**. For inquiries, please contact the repository owner.
+This is a private project by **Abdul Rehman**. For inquiries, please contact the repository owner.
 
 ---
 
@@ -528,14 +482,12 @@ Private and Proprietary. All rights reserved.
 
 - Built with [LiveKit](https://livekit.io/) for real-time voice
 - Powered by [OpenAI](https://openai.com/) GPT-4
-- UI components by [shadcn/ui](https://ui.shadcn.com/)
 - Hosted on [Vercel](https://vercel.com/) and [Render](https://render.com/)
 
 ---
 
 <div align="center">
 
-**Built with ❤️ for modern healthcare management**
 
 ⭐ Star this repo if you find it helpful!
 
