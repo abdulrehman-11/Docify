@@ -25,7 +25,9 @@ from routes.patients import router as patients_router
 from routes.appointments import router as appointments_router
 from routes.clinic import router as clinic_router
 from routes.staff import router as staff_router
+from routes.notifications import router as notifications_router
 from api_services.calendar_sync_service import calendar_router, start_auto_sync, stop_auto_sync
+from api_services.notification_cleanup_service import start_notification_cleanup, stop_notification_cleanup
 
 # Configure logging
 logging.basicConfig(
@@ -49,12 +51,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"📅 Calendar auto-sync not started: {e}")
     
+    # Start notification cleanup
+    try:
+        await start_notification_cleanup()
+        logger.info("🗑️ Notification cleanup initialized")
+    except Exception as e:
+        logger.warning(f"🗑️ Notification cleanup not started: {e}")
+    
     yield  # Server is running
     
     # Shutdown
     logger.info("🛑 Shutting down Ether Clinic API...")
     await stop_auto_sync()
     logger.info("📅 Calendar auto-sync stopped")
+    await stop_notification_cleanup()
+    logger.info("🗑️ Notification cleanup stopped")
 
 
 # Create FastAPI app with lifespan
@@ -95,6 +106,7 @@ app.include_router(patients_router)
 app.include_router(appointments_router)
 app.include_router(clinic_router)
 app.include_router(staff_router)
+app.include_router(notifications_router)
 app.include_router(calendar_router)
 
 

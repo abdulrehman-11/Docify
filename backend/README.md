@@ -1,170 +1,182 @@
-# Docify - AI-Powered Voice Agent Platform
+# Docify Backend
 
-A sophisticated voice AI agent platform built with LiveKit, OpenAI, and modern web technologies. Docify enables real-time voice interactions with advanced features like barge-in handling, finite state machines, and comprehensive metrics collection.
+Backend services for the Docify clinic management system, consisting of a REST API server and an AI voice agent for phone interactions.
 
-## Features
+## Components
 
-- **Real-time Voice Processing**: Powered by LiveKit for low-latency voice communications
-- **AI Integration**: OpenAI GPT models for intelligent conversation handling
-- **Advanced Voice Features**:
-  - Barge-in detection and handling
-  - Voice Activity Detection (VAD)
-  - Finite State Machine for conversation flow
-  - Real-time transcription with Deepgram
-- **Multi-language Support**: Python and Node.js implementations
-- **Metrics & Analytics**: Comprehensive performance monitoring
-- **Secure Configuration**: Environment-based API key management
+### 1. API Server (`api/`)
+FastAPI REST server providing endpoints for the web dashboard. Handles appointments, patients, staff, and clinic configuration.
 
-## 📦 Project Structure
+### 2. AI Voice Agent (`agent-python/`)
+LiveKit-based voice agent that handles phone calls, processes natural language requests, and manages appointments through voice interactions.
+
+## Project Structure
 
 ```
-docify/
-├── agent-python/          # Python implementation
-│   ├── agent.py           # Main Python agent
-│   ├── tools/             # Tool handlers and routing
-│   └── .env.example       # Environment template
-├── agent-starter-node/    # Node.js starter components
-├── src/                   # Core TypeScript/JavaScript modules
-│   ├── voice/             # Voice processing components
-│   ├── tools/             # Tool system
-│   └── dev/               # Development utilities
-└── README.md              # This file
+backend/
+├── api/                      # REST API Server
+│   ├── routes/              # API endpoints
+│   ├── api_services/        # Business logic
+│   ├── api_schemas/         # Request/response schemas
+│   ├── main.py             # FastAPI application
+│   └── requirements.txt
+│
+└── agent-python/            # AI Voice Agent
+    ├── tools/              # Agent tool handlers
+    ├── services/           # Service layer
+    ├── models/             # SQLAlchemy models
+    ├── alembic/            # Database migrations
+    ├── agent.py            # Agent entry point
+    ├── database.py         # Database configuration
+    └── requirements.txt
 ```
 
-## 🛠️ Setup
+## Prerequisites
 
-### Prerequisites
-
-- Python 3.8+
-- Node.js 16+
+- Python 3.11+
+- PostgreSQL database (Neon recommended)
+- Google Cloud account with Calendar API enabled
 - LiveKit account and API keys
 - OpenAI API key
-- Deepgram API key (optional, for transcription)
 
-### Environment Configuration
+## Installation
 
-1. Copy the environment template:
+### API Server
+
 ```bash
-cp agent-python/.env.example agent-python/.env.local
+cd api
+pip install -r requirements.txt
+pip install -r ../agent-python/requirements.txt
 ```
 
-2. Fill in your API keys:
+### Voice Agent
+
+```bash
+cd agent-python
+pip install -r requirements.txt
+```
+
+## Configuration
+
+### API Server Environment Variables
+
+Create `api/.env.local`:
+
 ```env
+DATABASE_URL=postgresql+asyncpg://user:password@host/database
+ALLOWED_ORIGINS=http://localhost:8080,https://your-frontend.vercel.app
+GOOGLE_SERVICE_ACCOUNT_JSON={"type": "service_account", ...}
+GOOGLE_CALENDAR_ID=your-calendar-id@gmail.com
+```
+
+### Voice Agent Environment Variables
+
+Create `agent-python/.env.local`:
+
+```env
+DATABASE_URL=postgresql+asyncpg://user:password@host/database
 LIVEKIT_URL=wss://your-livekit-instance.livekit.cloud
 LIVEKIT_API_KEY=your_livekit_api_key
 LIVEKIT_API_SECRET=your_livekit_api_secret
-OPENAI_API_KEY=your_openai_api_key
-DEEPGRAM_API_KEY=your_deepgram_api_key
+OPENAI_API_KEY=sk-your-openai-key
+DEEPGRAM_API_KEY=your_deepgram_key
+ELEVENLABS_API_KEY=your_elevenlabs_key
+GOOGLE_SERVICE_ACCOUNT_JSON={"type": "service_account", ...}
+GOOGLE_CALENDAR_ID=your-calendar-id@gmail.com
 ```
 
-### Python Setup
+## Running the Services
+
+### API Server
 
 ```bash
-cd agent-python
-pip install -r pyproject.toml
-python agent.py
+cd api
+python main.py
 ```
 
-### Node.js Setup
+The API will be available at:
+- Server: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
-```bash
-cd agent-starter-node
-npm install
-npm start
-```
+### Voice Agent
 
-## 🔧 Core Components
-
-### Voice Agent (`src/voice/agent.ts`)
-- Main orchestrator for voice interactions
-- Handles conversation state and flow control
-- Integrates with AI models for response generation
-
-### Finite State Machine (`src/voice/fsm.ts`)
-- Manages conversation states (listening, thinking, speaking)
-- Handles state transitions and validation
-- Provides hooks for custom state logic
-
-### Barge-in Handler (`src/voice/bargeIn.ts`)
-- Detects user interruptions during agent speech
-- Provides smooth conversation flow
-- Configurable sensitivity settings
-
-### Metrics Collection (`src/voice/metrics.ts`)
-- Tracks performance metrics
-- Monitors conversation quality
-- Provides analytics for optimization
-
-### Tool System (`src/tools/`)
-- Extensible tool architecture
-- Handler registration and routing
-- Schema validation for tool inputs
-
-## 🚦 Getting Started
-
-1. **Clone the repository**
-```bash
-git clone git@github.com:abdulrehman-11/Docify.git
-cd Docify
-```
-
-2. **Set up environment variables**
-```bash
-cp agent-python/.env.example agent-python/.env.local
-# Edit .env.local with your API keys
-```
-
-3. **Run the Python agent**
 ```bash
 cd agent-python
 python agent.py
 ```
 
-4. **Test with development utilities**
+## Database Migrations
+
+The project uses Alembic for database migrations:
+
 ```bash
-# Run mock tests
-cd src/dev
-node mockRun.ts
+cd agent-python
+
+# Create a new migration
+alembic revision --autogenerate -m "Description"
+
+# Apply migrations
+alembic upgrade head
+
+# Rollback one revision
+alembic downgrade -1
 ```
 
-## 📊 Features in Detail
+## Features
 
-### Voice Processing Pipeline
-1. **Audio Input**: Capture from microphone or streaming source
-2. **VAD Processing**: Detect speech activity
-3. **Transcription**: Convert speech to text (Deepgram/OpenAI)
-4. **AI Processing**: Generate intelligent responses
-5. **TTS Generation**: Convert responses to speech
-6. **Audio Output**: Deliver to speakers or stream
+### API Server
+- RESTful endpoints for appointments, patients, staff, and clinic data
+- Google Calendar bi-directional sync
+- Auto-sync service (runs every 5 minutes)
+- CORS configuration for frontend integration
+- Comprehensive error handling and validation
 
-### State Management
-- **Idle**: Waiting for user input
-- **Listening**: Actively receiving audio
-- **Processing**: AI generating response
-- **Speaking**: Agent delivering response
-- **Interrupted**: Handling barge-in events
+### Voice Agent
+- Natural language conversation handling with OpenAI GPT-4
+- Real-time voice processing with LiveKit
+- Appointment booking, cancellation, and rescheduling
+- Availability checking based on clinic hours
+- Patient information collection and validation
+- Database persistence with PostgreSQL
+- Google Calendar integration
 
-## 🔒 Security
+## Deployment
 
-- API keys stored in environment variables
-- `.env.local` files excluded from version control
-- Secure communication with LiveKit servers
-- Rate limiting and abuse protection
+### API Server (Render)
 
-## Contributing
+The `render.yaml` file in the root directory contains the deployment configuration for Render.com.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```bash
+# Deploy using Render Blueprint
+render deploy
+```
 
+### Voice Agent (Render/Railway)
 
-## Acknowledgments
+Deploy as a Python web service with the following configuration:
+- Build Command: `pip install -r requirements.txt`
+- Start Command: `python agent.py`
+- Environment: Python 3.11
 
-- [LiveKit](https://livekit.io/) for real-time communication infrastructure
-- [OpenAI](https://openai.com/) for advanced AI capabilities
-- [Deepgram](https://deepgram.com/) for speech recognition services
+## API Documentation
 
+Once the API server is running, visit:
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
----
+## Testing
+
+```bash
+# API Server
+cd api
+pytest
+
+# Voice Agent
+cd agent-python
+pytest
+```
+
+## License
+
+Private and Proprietary

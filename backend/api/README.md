@@ -1,35 +1,45 @@
-# Ether Clinic REST API
+# Docify REST API
 
-FastAPI REST server for the clinic staff dashboard. Connects to the same Neon PostgreSQL database as the voice agent.
+FastAPI REST server providing endpoints for the clinic management dashboard. Connects to PostgreSQL database shared with the AI voice agent.
 
-## 🚀 Quick Start
-
-### 1. Install Dependencies
+## Installation
 
 ```bash
-cd backend/api
 pip install -r requirements.txt
+pip install -r ../agent-python/requirements.txt
 ```
 
-### 2. Configure Environment
+## Configuration
 
-The `.env.local` file is already configured with your Neon database credentials.
+Create `.env.local` file:
 
-### 3. Run the Server
+```env
+DATABASE_URL=postgresql+asyncpg://user:password@host/database
+ALLOWED_ORIGINS=http://localhost:8080,https://your-frontend.vercel.app
+GOOGLE_SERVICE_ACCOUNT_JSON={"type": "service_account", ...}
+GOOGLE_CALENDAR_ID=your-calendar-id@gmail.com
+```
+
+## Running the Server
 
 ```bash
 python main.py
 ```
 
 The API will be available at:
-- **Server**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- Server: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
-## 📡 API Endpoints
+## Development Mode
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## API Endpoints
 
 ### Patients
-
 - `GET /patients` - List all patients (paginated)
 - `GET /patients/{id}` - Get patient by ID
 - `POST /patients` - Create new patient
@@ -37,49 +47,82 @@ The API will be available at:
 - `DELETE /patients/{id}` - Delete patient
 
 ### Appointments
-
-- `GET /appointments` - List all appointments (with filters)
-- `GET /appointments/{id}` - Get appointment by ID
+- `GET /appointments` - List appointments with filters (date, status, patient_id)
+- `GET /appointments/{id}` - Get appointment details
 - `POST /appointments` - Create new appointment
 - `PUT /appointments/{id}` - Update appointment
-- `POST /appointments/{id}/cancel` - Cancel appointment
 - `DELETE /appointments/{id}` - Delete appointment
-- `POST /appointments/availability` - Check available slots
+- `POST /appointments/availability` - Check available time slots
 
-### Clinic Hours
+### Staff
+- `GET /staff` - List all staff members
+- `GET /staff/{id}` - Get staff details
+- `POST /staff` - Create staff account
+- `PUT /staff/{id}` - Update staff account
+- `DELETE /staff/{id}` - Delete staff account
 
-- `GET /clinic/hours` - Get clinic hours for all days
-- `PUT /clinic/hours/{id}` - Update clinic hours
-- `POST /clinic/hours` - Create clinic hours
+### Clinic
+- `GET /clinic/hours` - Get clinic operating hours
+- `PUT /clinic/hours` - Update clinic hours
+- `GET /clinic/info` - Get clinic information
+- `PUT /clinic/info` - Update clinic information
 
-### Dashboard
+### Calendar Sync
+- `POST /calendar/sync` - Trigger manual calendar synchronization
+- `GET /calendar/status` - Get sync status
 
-- `GET /dashboard/stats` - Get statistics (counts, etc.)
-- `GET /dashboard/today` - Today's appointments
-- `GET /dashboard/upcoming` - Upcoming appointments
+## Project Structure
 
-## 🔧 Development
-
-### Run with Auto-Reload
-
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+api/
+├── routes/              # API route handlers
+│   ├── appointments.py
+│   ├── patients.py
+│   ├── staff.py
+│   └── clinic.py
+├── api_services/        # Business logic layer
+│   ├── appointment_service.py
+│   ├── patient_service.py
+│   ├── staff_service.py
+│   ├── clinic_service.py
+│   └── calendar_sync_service.py
+├── api_schemas/         # Pydantic request/response schemas
+│   ├── appointment.py
+│   ├── patient.py
+│   ├── staff.py
+│   └── clinic.py
+├── api_database.py      # Database session management
+└── main.py             # FastAPI application entry point
 ```
 
-### Access Interactive Docs
+## Database
 
-Visit http://localhost:8000/docs to test all endpoints interactively.
-
-## 🗄️ Database
-
-The API connects to the same Neon PostgreSQL database as the voice agent:
-- Database: `neondb`
-- Tables: `patients`, `appointments`, `clinic_hours`
-- All data is synchronized between voice agent and REST API
-
-## 📝 Notes
-
-- CORS is configured for local frontend development (ports 3000, 5173, 5174)
+The API uses the same PostgreSQL database as the voice agent:
+- Shared tables: `patients`, `appointments`, `staff`, `clinic_hours`
+- Two-way synchronization with Google Calendar
 - All datetime fields use ISO8601 format with timezone
-- Pagination defaults: page=1, page_size=50
-- Status values: CONFIRMED, CANCELLED, RESCHEDULED, COMPLETED
+
+## Features
+
+- RESTful API with comprehensive endpoint coverage
+- Automatic Google Calendar synchronization (bi-directional)
+- Background auto-sync task (runs every 5 minutes)
+- CORS configuration for frontend integration
+- Request validation with Pydantic schemas
+- Comprehensive error handling
+- Interactive API documentation (Swagger UI)
+
+## Notes
+
+- Default pagination: page=1, page_size=50
+- Appointment statuses: SCHEDULED, CONFIRMED, CANCELLED, COMPLETED
+- All times must be in ISO8601 format with timezone
+- CORS allows localhost:8080 and configured production origins
+
+## Deployment
+
+Configured for deployment on Render.com. See `render.yaml` in the root directory for deployment configuration.
+
+## License
+
+Private and Proprietary

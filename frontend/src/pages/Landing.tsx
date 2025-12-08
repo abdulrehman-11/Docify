@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
+import { ClinicHoursModal } from '@/components/ClinicHoursModal';
 import { 
   Phone, 
   Calendar, 
@@ -14,6 +16,8 @@ import {
 } from 'lucide-react';
 
 const Landing = () => {
+  const [showClinicHours, setShowClinicHours] = useState(false);
+
   return (
     <div className="min-h-screen">
       <Navbar />
@@ -43,9 +47,14 @@ const Landing = () => {
                   Call Now: +92-444-555-777
                 </Button>
               </a>
-              <Button size="lg" variant="outline" className="text-lg px-8 py-6 hover-lift">
-                <Calendar className="w-5 h-5 mr-2" />
-                View Doctors
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="text-lg px-8 py-6 hover-lift"
+                onClick={() => setShowClinicHours(true)}
+              >
+                <Clock className="w-5 h-5 mr-2" />
+                View Clinic Hours
               </Button>
             </div>
           </div>
@@ -195,7 +204,9 @@ const Landing = () => {
               </div>
               <h3 className="font-semibold mb-2">Address</h3>
               <p className="text-sm text-muted-foreground">
-                123 Medical Center, Islamabad, Pakistan
+                Plot 123, Street 45, F-7 Markaz
+                <br />
+                Islamabad, Pakistan
               </p>
             </div>
           </div>
@@ -208,6 +219,9 @@ const Landing = () => {
           <p>© 2025 HealthCare Plus Clinic. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* Clinic Hours Modal */}
+      <ClinicHoursModal open={showClinicHours} onOpenChange={setShowClinicHours} />
     </div>
   );
 };

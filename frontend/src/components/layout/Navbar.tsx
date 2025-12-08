@@ -27,7 +27,10 @@ export const Navbar = () => {
               Contact
             </a>
             <Link to="/login">
-              <Button variant="outline" className="glass hover:bg-primary/10">
+              <Button 
+                variant="outline" 
+                className="glass hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all"
+              >
                 Staff Login
               </Button>
             </Link>

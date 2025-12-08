@@ -8,3 +8,5 @@ export { appointmentApi } from './appointments';
 export { dashboardApi } from './dashboard';
 export { clinicApi } from './clinic';
 export { staffApi } from './staff';
+export { notificationApi } from './notifications';
+export type { Notification, NotificationListResponse, NotificationFilters } from './notifications';

@@ -82,10 +82,6 @@ A comprehensive full-stack clinic management platform featuring an intelligent A
   - Operating hours for each day of the week
   - Contact information (address, phone, email)
   - Service catalog with durations
-- **Knowledge Base**: 
-  - AI response configuration for common questions
-  - Category-based organization
-  - Search and filter capabilities
 
 #### Staff Features
 - **Limited Dashboard**: View appointments for assigned providers only
@@ -282,7 +278,7 @@ python agent.py
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 Docify/
@@ -376,7 +372,7 @@ Docify/
 
 ---
 
-## 🔐 Environment Variables
+## Environment Variables
 
 ### Frontend
 No environment variables required. Authentication uses localStorage.
@@ -422,7 +418,7 @@ GOOGLE_CALENDAR_ID=your-calendar-id@gmail.com
 
 ---
 
-## 📚 API Documentation
+## API Documentation
 
 Once the backend is running, visit:
 - **Swagger UI**: http://localhost:8000/docs
@@ -460,25 +456,25 @@ Once the backend is running, visit:
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 This is a private project by **Abdul Rehman**. For inquiries, please contact the repository owner.
 
 ---
 
-## 📄 License
+## License
 
 Private and Proprietary. All rights reserved.
 
 ---
 
-## 👤 Author
+## Author
 
 **Abdul Rehman** ([@abdulrehman-11](https://github.com/abdulrehman-11))
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built with [LiveKit](https://livekit.io/) for real-time voice
 - Powered by [OpenAI](https://openai.com/) GPT-4

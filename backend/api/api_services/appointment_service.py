@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from models.appointment import Appointment, AppointmentStatus
 from models.patient import Patient
+from models.notification import NotificationType
+from api_schemas.notification import NotificationCreate
 from datetime import datetime, date, time, timedelta
 from typing import Optional
 import logging
@@ -191,6 +193,18 @@ class AppointmentAPIService:
                 logger.error(f"Failed to create calendar event: {e}")
                 # Continue without calendar - appointment is still valid
         
+        # Try to create notification (non-critical operation)
+        try:
+            # Use a nested transaction (savepoint) to isolate notification failure
+            async with self.session.begin_nested():
+                await self._create_appointment_notification(
+                    appointment, patient, NotificationType.APPOINTMENT_CREATED
+                )
+                await self.session.flush()
+        except Exception as e:
+            logger.warning(f"Failed to create notification (non-critical): {e}")
+            # Savepoint rolled back, but main transaction continues
+        
         logger.info(f"Created appointment ID {appointment.id}")
         return appointment
 
@@ -270,6 +284,23 @@ class AppointmentAPIService:
             except Exception as e:
                 logger.error(f"Failed to update calendar event: {e}")
         
+        # Create notification (non-critical operation)
+        try:
+            patient_stmt = select(Patient).where(Patient.id == appointment.patient_id)
+            patient_result = await self.session.execute(patient_stmt)
+            patient = patient_result.scalar_one_or_none()
+            
+            if patient:
+                notification_type = (
+                    NotificationType.APPOINTMENT_RESCHEDULED if time_changed 
+                    else NotificationType.APPOINTMENT_UPDATED
+                )
+                async with self.session.begin_nested():
+                    await self._create_appointment_notification(appointment, patient, notification_type)
+                    await self.session.flush()
+        except Exception as e:
+            logger.warning(f"Failed to create notification (non-critical): {e}")
+        
         logger.info(f"Updated appointment ID {appointment_id}")
         return appointment
 
@@ -301,6 +332,21 @@ class AppointmentAPIService:
                 logger.info(f"Deleted calendar event {calendar_event_id}")
             except Exception as e:
                 logger.error(f"Failed to delete calendar event: {e}")
+        
+        # Create notification (non-critical operation)
+        try:
+            patient_stmt = select(Patient).where(Patient.id == appointment.patient_id)
+            patient_result = await self.session.execute(patient_stmt)
+            patient = patient_result.scalar_one_or_none()
+            
+            if patient:
+                async with self.session.begin_nested():
+                    await self._create_appointment_notification(
+                        appointment, patient, NotificationType.APPOINTMENT_CANCELLED
+                    )
+                    await self.session.flush()
+        except Exception as e:
+            logger.warning(f"Failed to create notification (non-critical): {e}")
         
         logger.info(f"Cancelled appointment ID {appointment_id}")
         return appointment
@@ -466,3 +512,54 @@ class AppointmentAPIService:
 
         logger.info(f"Generated dashboard stats: {stats}")
         return stats
+
+    async def _create_appointment_notification(
+        self,
+        appointment: Appointment,
+        patient: Patient,
+        notification_type: NotificationType
+    ):
+        """Helper method to create appointment notifications - gracefully handles missing table"""
+        from models.notification import Notification
+        
+        type_messages = {
+            NotificationType.APPOINTMENT_CREATED: {
+                "title": "New Appointment Booked",
+                "message": f"New appointment booked for {patient.name} at {appointment.start_time.strftime('%I:%M %p on %B %d, %Y')}"
+            },
+            NotificationType.APPOINTMENT_UPDATED: {
+                "title": "Appointment Updated",
+                "message": f"Appointment for {patient.name} has been updated"
+            },
+            NotificationType.APPOINTMENT_CANCELLED: {
+                "title": "Appointment Cancelled",
+                "message": f"Appointment for {patient.name} at {appointment.start_time.strftime('%I:%M %p on %B %d, %Y')} has been cancelled"
+            },
+            NotificationType.APPOINTMENT_RESCHEDULED: {
+                "title": "Appointment Rescheduled",
+                "message": f"Appointment for {patient.name} has been rescheduled to {appointment.start_time.strftime('%I:%M %p on %B %d, %Y')}"
+            },
+        }
+        
+        msg_data = type_messages.get(notification_type, {
+            "title": "Appointment Notification",
+            "message": f"Appointment for {patient.name}"
+        })
+        
+        notification = Notification(
+            user_role="admin",
+            type=notification_type,
+            title=msg_data["title"],
+            message=msg_data["message"],
+            data={
+                "appointment_id": appointment.id,
+                "patient_name": patient.name,
+                "appointment_time": appointment.start_time.isoformat(),
+                "reason": appointment.reason
+            }
+        )
+        
+        self.session.add(notification)
+        # Note: flush is called in the calling method
+        logger.info(f"Prepared notification for appointment {appointment.id}: {notification_type}")
+
