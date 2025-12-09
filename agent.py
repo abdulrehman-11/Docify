@@ -4,6 +4,7 @@ import logging
 import os
 import platform
 import asyncio
+import threading
 from livekit.plugins import openai as openai_plugin
 from livekit.plugins import deepgram
 from livekit.plugins import openai as openai_plugin
@@ -49,6 +50,41 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from database import engine, Base, AsyncSessionLocal
+
+# Lightweight HTTP healthcheck server for Railway
+def start_healthcheck_server():
+    """
+    Railway expects /health to return 200. Start a tiny aiohttp server on PORT (default 8000).
+    Runs in a background thread so it doesn't block the LiveKit worker.
+    """
+    try:
+        from aiohttp import web
+    except Exception as e:
+        logger.warning(f"Healthcheck server not started (aiohttp missing?): {e}")
+        return
+
+    async def handle_health(_):
+        return web.Response(text="ok")
+
+    async def run():
+        app = web.Application()
+        app.router.add_get("/health", handle_health)
+        port = int(os.getenv("PORT", "8000"))
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", port)
+        await site.start()
+        logger.info(f"✅ Healthcheck server listening on 0.0.0.0:{port}")
+        # Keep running forever
+        while True:
+            await asyncio.sleep(3600)
+
+    def _start():
+        asyncio.run(run())
+
+    thread = threading.Thread(target=_start, daemon=True, name="healthcheck-server")
+    thread.start()
+    return thread
 
 
 LIVEKIT_SIP_NUMBER = "+15184006003"
@@ -730,6 +766,9 @@ if __name__ == "__main__":
     
     logger.info("="*70)
     
+    # Start healthcheck HTTP endpoint for Railway
+    start_healthcheck_server()
+
     worker_opts = WorkerOptions(
         entrypoint_fnc=entrypoint,
         agent_name="hexaa-clinic-agent",
