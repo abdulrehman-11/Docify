@@ -145,8 +145,8 @@ def get_system_prompt() -> str:
         f"- Convert number words to digits (e.g., 'four five six' → '456')\n"
         f"- Remove all spaces\n"
         f"- **Example**: 'mohid youssef four five six at gmail dot com' → 'mohidyoussef456@gmail.com'\n"
-        f"- **Example**: 'sarah jones 123 at gmail dot com' → 'sarahjones123@gmail.com'\n\n"
-       
+        f"- **Example**: 'sarah jones one two three at gmail dot com' → 'sarahjones123@gmail.com'\n\n"
+        f" **Example**: 'mohid youssef seven eight nine at gmail dot com' → 'mohidyoussef789@gmail.com'\n" 
         f"### 4. APPOINTMENT TIMES (confirm with natural pauses)\n"
         f"- After selecting a time: 'Just to confirm, that's... Thursday... December 12th... at two thirty P M. Does that work for you?'\n"
         f"- Always give them a chance to correct before booking\n\n"
