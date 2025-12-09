@@ -1,0 +1,16 @@
+.venv
+venv
+__pycache__
+*.pyc
+.git
+.gitignore
+.env
+.env.*
+google_service_account.json
+node_modules
+*.log
+uv.lock
+dist
+build
+.DS_Store
+

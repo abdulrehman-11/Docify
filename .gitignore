@@ -1,37 +1,18 @@
-# Root level gitignore
-echo "backend/agent-python/.venv-migrate/" >> .gitignore
-# Frontend build artifacts
-frontend/dist
-frontend/dist-ssr
-frontend/node_modules
-frontend/.vite
-frontend/*.local
+# Python artifacts
+__pycache__/
+*.pyc
 
-# Backend
-backend/__pycache__/
-backend/*.pyc
-backend/.env
-backend/venv/
-backend/.venv/
-backend/agent-python/__pycache__/
-backend/agent-python/*.pyc
-backend/agent-python/.env
-backend/agent-python/venv/
-backend/agent-python/.venv/
+# Virtual environments
+.venv/
+venv/
 
-# Google Service Account (secrets)
-**/google_service_account.json
+# Environment / secrets
+.env
+.env.*
+!.env.example
 google_service_account.json
 
-# IDEs
-.vscode/*
-!.vscode/extensions.json
-.idea
+# OS / misc
 .DS_Store
-
-# Logs
 *.log
-logs/
 
-# OS
-Thumbs.db
