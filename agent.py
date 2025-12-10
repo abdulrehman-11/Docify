@@ -628,8 +628,6 @@ async def entrypoint(ctx: JobContext):
         api_key=cartesia_key,
         voice=cartesia_voice,
         model=cartesia_model,
-        sample_rate=24000,
-        format="pcm",
     )
     logger.info(f"✅ Cartesia TTS initialized (voice={cartesia_voice}, model={cartesia_model})")
     logger.info("   Latency target: low (sonic-english)")
