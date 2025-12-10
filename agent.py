@@ -23,8 +23,7 @@ if platform.system() != "Darwin":  # Disable on Linux (Render) and Windows
 from livekit import agents, rtc
 from livekit.agents import AgentSession, Agent, RoomInputOptions, llm, WorkerOptions, WorkerType, JobContext
 from livekit.plugins import openai
-from livekit.plugins import elevenlabs
-from livekit.plugins.elevenlabs import tts as el_tts
+from livekit.plugins import cartesia
 
 # Only load these plugins if inference executor is enabled (macOS only)
 # Prevents dependency issues on Render deployment
@@ -612,33 +611,28 @@ async def entrypoint(ctx: JobContext):
     livekit_tools = create_livekit_tools(router)
     logger.info(f"📦 Registered {len(router.list_tools())} tools")
 
-    # ===== USE ELEVENLABS TTS =====
-    logger.info("🎙️  Configuring ElevenLabs TTS...")
-    
-    # Debug: Check if API key is present (masked for security)
-    eleven_labs_key = os.getenv("ELEVEN_LABS")
-    if not eleven_labs_key:
-        logger.error("❌ ELEVEN_LABS environment variable is NOT SET!")
-        logger.error("   This will cause TTS to fail. Please set ELEVEN_LABS in Render environment.")
+    # ===== USE CARTESIA TTS (switch from ElevenLabs) =====
+    logger.info("🎙️  Configuring Cartesia TTS...")
+    cartesia_key = os.getenv("CARTESIA_API_KEY")
+    cartesia_voice = os.getenv("CARTESIA_VOICE_ID", "af_sarah")  # default Cartesia public voice
+    cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-english")  # low-latency model
+
+    if not cartesia_key:
+        logger.error("❌ CARTESIA_API_KEY is NOT set. TTS will fail.")
     else:
-        masked_key = eleven_labs_key[:4] + "****" + eleven_labs_key[-4:] if len(eleven_labs_key) > 8 else "****"
-        logger.info(f"✅ ELEVEN_LABS key found: {masked_key}")
-    
-    voice_id = "pzxut4zZz4GImZNlqQ3H"
-    logger.info(f"   Using Voice ID: {voice_id}")
-    logger.info(f"   Model: eleven_turbo_v2_5")
-    
-    tts_instance = el_tts.TTS(
-        voice_id=voice_id, 
-        model="eleven_turbo_v2_5",
-        api_key=eleven_labs_key,
-        enable_ssml_parsing=False,  
-        chunk_length_schedule=[100, 160, 220], 
-        streaming_latency=2,
+        masked = cartesia_key[:4] + "****" + cartesia_key[-4:] if len(cartesia_key) > 8 else "****"
+        logger.info(f"✅ CARTESIA_API_KEY found: {masked}")
+
+    # Initialize Cartesia TTS
+    tts_instance = cartesia.TTS(
+        api_key=cartesia_key,
+        voice=cartesia_voice,
+        model=cartesia_model,
+        sample_rate=24000,
+        format="pcm",
     )
-    logger.info("✅ ElevenLabs TTS initialized")
-    logger.info("   Voice:  (Ultra-Realistic)")
-    logger.info("   Latency: ~100-200ms")
+    logger.info(f"✅ Cartesia TTS initialized (voice={cartesia_voice}, model={cartesia_model})")
+    logger.info("   Latency target: low (sonic-english)")
 
    
     logger.info("⚙️  Configuring AgentSession...")
