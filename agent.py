@@ -23,7 +23,7 @@ if platform.system() != "Darwin":  # Disable on Linux (Render) and Windows
 from livekit import agents, rtc
 from livekit.agents import AgentSession, Agent, RoomInputOptions, llm, WorkerOptions, WorkerType, JobContext
 from livekit.plugins import openai
-from livekit.plugins import cartesia
+from livekit.plugins.cartesia import tts as cartesia_tts
 
 # Only load these plugins if inference executor is enabled (macOS only)
 # Prevents dependency issues on Render deployment
@@ -624,7 +624,7 @@ async def entrypoint(ctx: JobContext):
         logger.info(f"✅ CARTESIA_API_KEY found: {masked}")
 
     # Initialize Cartesia TTS
-    tts_instance = cartesia.TTS(
+    tts_instance = cartesia_tts.TTS(
         api_key=cartesia_key,
         voice=cartesia_voice,
         model=cartesia_model,
