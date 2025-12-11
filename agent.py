@@ -5,8 +5,7 @@ import os
 import platform
 import asyncio
 import threading
-from livekit.plugins import openai as openai_plugin
-from livekit.plugins import deepgram
+from typing import Optional
 from livekit.plugins import openai as openai_plugin
 from livekit.plugins import deepgram
 
@@ -51,6 +50,48 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from database import engine, Base, AsyncSessionLocal
+
+
+def elevenlabs_healthcheck(api_key: str, voice_id: str, model: str) -> Optional[str]:
+    """
+    Best-effort healthcheck to surface the real HTTP status/body from ElevenLabs.
+    Returns None on success, or a short error string on failure.
+    """
+    if os.getenv("ELEVEN_HEALTHCHECK", "1") == "0":
+        logger.info("⏩ ElevenLabs healthcheck skipped (ELEVEN_HEALTHCHECK=0)")
+        return None
+
+    try:
+        import httpx
+    except Exception as e:
+        logger.warning(f"Skipping ElevenLabs healthcheck (httpx missing/unavailable): {e}")
+        return "httpx-missing"
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+    payload = {
+        "text": "healthcheck",
+        "model_id": model,
+        "voice_settings": {"stability": 0.5, "similarity_boost": 0.5},
+    }
+    headers = {
+        "xi-api-key": api_key,
+        "accept": "audio/mpeg",
+        "content-type": "application/json",
+    }
+
+    try:
+        resp = httpx.post(url, json=payload, headers=headers, timeout=10)
+    except Exception as e:
+        logger.error(f"❌ ElevenLabs healthcheck network error: {e}")
+        return f"request-error:{type(e).__name__}"
+
+    body_preview = resp.text[:400] if resp.text else "<empty>"
+    logger.info(f"🎧 ElevenLabs healthcheck status={resp.status_code}, bytes={len(resp.content)}")
+    if resp.status_code != 200:
+        logger.error(f"❌ ElevenLabs healthcheck failed: status={resp.status_code}, body_preview={body_preview}")
+        return f"status-{resp.status_code}"
+
+    return None
 
 # Lightweight HTTP healthcheck server for Railway
 def start_healthcheck_server():
@@ -641,6 +682,13 @@ async def entrypoint(ctx: JobContext):
         voice_id = os.getenv("ELEVEN_VOICE_ID", "pzxut4zZz4GImZNlqQ3H")
         model = os.getenv("ELEVEN_MODEL", "eleven_turbo_v2_5")
         logger.info(f"🎙️  Using ElevenLabs TTS (voice={voice_id}, model={model})")
+
+        # Run a quick healthcheck to surface HTTP errors (auth/quota/network) early.
+        health_err = elevenlabs_healthcheck(eleven_labs_key, voice_id, model)
+        if health_err:
+            logger.warning(f"🔎 ElevenLabs healthcheck flagged an issue ({health_err}). "
+                           f"Agent will still start and rely on runtime retries.")
+
         return el_tts.TTS(
             voice_id=voice_id,
             model=model,
