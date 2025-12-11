@@ -674,15 +674,14 @@ async def entrypoint(ctx: JobContext):
             except Exception as e:
                 logger.error(f"❌ Cartesia TTS init failed, will fallback: {e}")
 
-        # 2) Deepgram TTS (tertiary)
+        # 2) Deepgram TTS (secondary)
         dg_key = os.getenv("DEEPGRAM_API_KEY")
         if dg_key:
             try:
-                logger.info("🎙️  Using Deepgram TTS fallback (voice=aura-asteria-en)")
-                return deepgram.TTS(
-                    api_key=dg_key,
-                    voice="aura-asteria-en",
-                )
+                dg_model = os.getenv("DEEPGRAM_TTS_MODEL", "aura-asteria-en")
+                logger.info(f"🎙️  Using Deepgram TTS fallback (model={dg_model})")
+                # Deepgram TTS expects 'model', not 'voice'
+                return deepgram.TTS(model=dg_model, api_key=dg_key)
             except Exception as e:
                 logger.error(f"❌ Deepgram TTS init failed, will fallback: {e}")
 
