@@ -654,7 +654,7 @@ async def entrypoint(ctx: JobContext):
     livekit_tools = create_livekit_tools(router)
     logger.info(f"📦 Registered {len(router.list_tools())} tools")
 
-    # ===== TTS SELECTION: Cartesia -> OpenAI TTS -> Deepgram TTS -> ElevenLabs =====
+    # ===== TTS SELECTION: Cartesia -> Deepgram TTS -> ElevenLabs (OpenAI TTS commented) =====
     def build_tts():
         # 1) Cartesia (preferred)
         cartesia_key = os.getenv("CARTESIA_API_KEY")
@@ -674,19 +674,7 @@ async def entrypoint(ctx: JobContext):
             except Exception as e:
                 logger.error(f"❌ Cartesia TTS init failed, will fallback: {e}")
 
-        # 2) OpenAI TTS (secondary)
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key:
-            try:
-                logger.info("🎙️  Using OpenAI TTS fallback (model=gpt-4o-mini-tts, voice=alloy)")
-                return openai_plugin.TTS(
-                    model="gpt-4o-mini-tts",
-                    voice="alloy",
-                )
-            except Exception as e:
-                logger.error(f"❌ OpenAI TTS init failed, will fallback: {e}")
-
-        # 3) Deepgram TTS (tertiary)
+        # 2) Deepgram TTS (tertiary)
         dg_key = os.getenv("DEEPGRAM_API_KEY")
         if dg_key:
             try:
