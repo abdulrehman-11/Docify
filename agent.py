@@ -654,28 +654,55 @@ async def entrypoint(ctx: JobContext):
     livekit_tools = create_livekit_tools(router)
     logger.info(f"📦 Registered {len(router.list_tools())} tools")
 
-    # ===== TTS SELECTION: Cartesia first, fallback to ElevenLabs =====
+    # ===== TTS SELECTION: Cartesia -> OpenAI TTS -> Deepgram TTS -> ElevenLabs =====
     def build_tts():
-        # Cartesia preferred
+        # 1) Cartesia (preferred)
         cartesia_key = os.getenv("CARTESIA_API_KEY")
         cartesia_voice = os.getenv("CARTESIA_VOICE_ID", "af_sarah")
         cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-english")
 
         if cartesia_key:
-            masked = cartesia_key[:4] + "****" + cartesia_key[-4:] if len(cartesia_key) > 8 else "****"
-            logger.info(f"✅ CARTESIA_API_KEY found: {masked}")
-            logger.info(f"🎙️  Using Cartesia TTS (voice={cartesia_voice}, model={cartesia_model})")
-            return cartesia_tts.TTS(
-                api_key=cartesia_key,
-                voice=cartesia_voice,
-                model=cartesia_model,
-            )
+            try:
+                masked = cartesia_key[:4] + "****" + cartesia_key[-4:] if len(cartesia_key) > 8 else "****"
+                logger.info(f"✅ CARTESIA_API_KEY found: {masked}")
+                logger.info(f"🎙️  Using Cartesia TTS (voice={cartesia_voice}, model={cartesia_model})")
+                return cartesia_tts.TTS(
+                    api_key=cartesia_key,
+                    voice=cartesia_voice,
+                    model=cartesia_model,
+                )
+            except Exception as e:
+                logger.error(f"❌ Cartesia TTS init failed, will fallback: {e}")
 
-        # Fallback: ElevenLabs
-        logger.warning("⚠️ CARTESIA_API_KEY not set; falling back to ElevenLabs TTS")
+        # 2) OpenAI TTS (secondary)
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            try:
+                logger.info("🎙️  Using OpenAI TTS fallback (model=gpt-4o-mini-tts, voice=alloy)")
+                return openai_plugin.TTS(
+                    model="gpt-4o-mini-tts",
+                    voice="alloy",
+                )
+            except Exception as e:
+                logger.error(f"❌ OpenAI TTS init failed, will fallback: {e}")
+
+        # 3) Deepgram TTS (tertiary)
+        dg_key = os.getenv("DEEPGRAM_API_KEY")
+        if dg_key:
+            try:
+                logger.info("🎙️  Using Deepgram TTS fallback (voice=aura-asteria-en)")
+                return deepgram.TTS(
+                    api_key=dg_key,
+                    voice="aura-asteria-en",
+                )
+            except Exception as e:
+                logger.error(f"❌ Deepgram TTS init failed, will fallback: {e}")
+
+        # 4) ElevenLabs (final fallback with healthcheck)
+        logger.warning("⚠️ No Cartesia/OpenAI/Deepgram TTS available; falling back to ElevenLabs TTS")
         eleven_labs_key = os.getenv("ELEVEN_LABS")
         if not eleven_labs_key:
-            raise ValueError("No TTS provider configured. Set CARTESIA_API_KEY or ELEVEN_LABS.")
+            raise ValueError("No TTS provider configured. Set CARTESIA_API_KEY, OPENAI_API_KEY, DEEPGRAM_API_KEY, or ELEVEN_LABS.")
 
         masked_key = eleven_labs_key[:4] + "****" + eleven_labs_key[-4:] if len(eleven_labs_key) > 8 else "****"
         logger.info(f"✅ ELEVEN_LABS key found: {masked_key}")
