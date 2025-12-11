@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from services.appointment_service import AppointmentService
 from services.patient_service import PatientService
 from services.google_calendar_service import get_calendar_service
+from services.email_service import get_email_service  # ADD THIS IMPORT
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ async def check_availability(i: CheckAvailabilityInput) -> CheckAvailabilityOutp
     ])
 
 async def book_appointment(i: BookAppointmentInput) -> BookAppointmentOutput:
-  """Book appointment with conflict detection and Google Calendar integration."""
+  """Book appointment with conflict detection, Google Calendar, and EMAIL confirmation."""
   logger.info("Executing book_appointment handler")
   logger.info(f"Booking details - Name: {i.name}, Email: {i.email}, Slot: {i.slot_start[11:16]}-{i.slot_end[11:16]}")
 
@@ -116,6 +117,29 @@ async def book_appointment(i: BookAppointmentInput) -> BookAppointmentOutput:
         logger.warning(f"Calendar event not created for appointment {appointment.id} - calendar may be disabled")
 
       confirmation_id = f"cnf_{appointment.id}_{int(datetime.now().timestamp())}"
+      
+      # ========================================
+      # 📧 SEND CONFIRMATION EMAIL
+      # ========================================
+      logger.info(f"📧 Attempting to send confirmation email to {patient.email}")
+      email_service = get_email_service()
+      
+      email_sent = email_service.send_appointment_confirmation(
+        patient_name=patient.name,
+        patient_email=patient.email,
+        appointment_date=start_time,
+        appointment_time_start=i.slot_start,
+        appointment_time_end=i.slot_end,
+        reason=i.reason,
+        confirmation_id=confirmation_id,
+        phone=patient.phone
+      )
+      
+      if email_sent:
+        logger.info(f"✅ Confirmation email sent successfully to {patient.email}")
+      else:
+        logger.warning(f"⚠️  Confirmation email NOT sent (check email configuration)")
+      
       logger.info(f"Successfully booked appointment {appointment.id}")
       return BookAppointmentOutput(confirmation_id=confirmation_id)
 
@@ -173,7 +197,7 @@ async def lookup_appointment(i: LookupAppointmentInput) -> LookupAppointmentOutp
     )
 
 async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutput:
-  """Cancel appointment by patient name and time, and remove from Google Calendar."""
+  """Cancel appointment by patient name and time, remove from Google Calendar, and SEND cancellation email."""
   logger.info("Executing cancel_appointment handler")
   async with _session_factory() as session:
     appointment_service = AppointmentService(session)
@@ -198,8 +222,13 @@ async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutp
       
       raise ValueError(error_msg)
 
-    # Store calendar event ID before canceling
+    # Store info BEFORE canceling (we need it for email)
     calendar_event_id = appointment.google_calendar_event_id
+    patient = appointment.patient
+    appointment_start = appointment.start_time
+    appointment_reason = appointment.reason
+    patient_email = patient.email
+    patient_name = patient.name
 
     # Cancel it
     await appointment_service.cancel_appointment(
@@ -219,14 +248,30 @@ async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutp
     else:
       logger.info(f"No calendar event linked to appointment {appointment.id}")
 
+    # ========================================
+    # 📧 SEND CANCELLATION EMAIL
+    # ========================================
+    logger.info(f"📧 Attempting to send cancellation email to {patient_email}")
+    email_service = get_email_service()
+    
+    email_sent = email_service.send_cancellation_email(
+      patient_name=patient_name,
+      patient_email=patient_email,
+      appointment_date=appointment_start,
+      appointment_time=i.slot_start,
+      reason=appointment_reason
+    )
+    
+    if email_sent:
+      logger.info(f"✅ Cancellation email sent successfully to {patient_email}")
+    else:
+      logger.warning(f"⚠️  Cancellation email NOT sent (check email configuration)")
+
     logger.info(f"Cancelled appointment {appointment.id}")
     return CancelAppointmentOutput(status="cancelled")
 
 async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleAppointmentOutput:
-  """Reschedule appointment to new time and update Google Calendar.
-  
-  Now supports rescheduling cancelled appointments by reactivating them with new times.
-  """
+  """Reschedule appointment to new time, update Google Calendar, and SEND reschedule email."""
   logger.info("Executing reschedule_appointment handler")
   async with _session_factory() as session:
     appointment_service = AppointmentService(session)
@@ -245,6 +290,12 @@ async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleApp
       # Use the first appointment as fallback
       appointment = all_appointments[0]
       logger.info(f"Using appointment for {i.name} at {appointment.start_time} (status: {appointment.status}) as fallback")
+
+    # Store OLD appointment info for email
+    old_appointment_start = appointment.start_time
+    old_appointment_time = i.current_slot_start
+    patient = appointment.patient
+    appointment_reason = appointment.reason
 
     # Check if appointment is cancelled
     is_cancelled = appointment.status == "cancelled"
@@ -271,6 +322,30 @@ async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleApp
     
     status_message = "reactivated and rescheduled" if is_cancelled else "rescheduled"
     logger.info(f"{status_message.capitalize()} appointment {appointment.id} to {new_appointment.id}")
+
+    # ========================================
+    # 📧 SEND RESCHEDULE EMAIL
+    # ========================================
+    logger.info(f"📧 Attempting to send reschedule email to {patient.email}")
+    email_service = get_email_service()
+    
+    email_sent = email_service.send_reschedule_email(
+      patient_name=patient.name,
+      patient_email=patient.email,
+      old_date=old_appointment_start,
+      old_time=old_appointment_time,
+      new_date=new_start,
+      new_time_start=i.new_slot_start,
+      new_time_end=i.new_slot_end,
+      reason=appointment_reason,
+      confirmation_id=new_confirmation_id,
+      phone=patient.phone
+    )
+    
+    if email_sent:
+      logger.info(f"✅ Reschedule email sent successfully to {patient.email}")
+    else:
+      logger.warning(f"⚠️  Reschedule email NOT sent (check email configuration)")
 
     return RescheduleAppointmentOutput(
       status=status_message,
