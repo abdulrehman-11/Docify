@@ -678,7 +678,7 @@ async def entrypoint(ctx: JobContext):
         dg_key = os.getenv("DEEPGRAM_API_KEY")
         if dg_key:
             try:
-                dg_model = os.getenv("DEEPGRAM_TTS_MODEL", "aura-asteria-en")
+                dg_model = os.getenv("DEEPGRAM_TTS_MODEL", "aura-2-electra-en")
                 logger.info(f"🎙️  Using Deepgram TTS fallback (model={dg_model})")
                 # Deepgram TTS expects 'model', not 'voice'
                 return deepgram.TTS(model=dg_model, api_key=dg_key)
@@ -693,7 +693,7 @@ async def entrypoint(ctx: JobContext):
 
         masked_key = eleven_labs_key[:4] + "****" + eleven_labs_key[-4:] if len(eleven_labs_key) > 8 else "****"
         logger.info(f"✅ ELEVEN_LABS key found: {masked_key}")
-        voice_id = os.getenv("ELEVEN_VOICE_ID", "pzxut4zZz4GImZNlqQ3H")
+        voice_id = os.getenv("ELEVEN_VOICE_ID", "O4cGUVdAocn0z4EpQ9yF")
         model = os.getenv("ELEVEN_MODEL", "eleven_turbo_v2_5")
         logger.info(f"🎙️  Using ElevenLabs TTS (voice={voice_id}, model={model})")
 
