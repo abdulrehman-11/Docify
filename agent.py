@@ -48,6 +48,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+# Quiet noisy dependency debug logs (we still emit our own)
+logging.getLogger("openai").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 from database import engine, Base, AsyncSessionLocal
 
@@ -586,7 +590,17 @@ class Assistant(Agent):
     
     async def _before_llm_cb(self, llm_stream, chat_context):
         """Called before LLM generates response"""
-        logger.info("🤖 LLM processing request...")
+        # Pull the latest user message (skip system) for concise logging
+        last_user = None
+        for msg in reversed(chat_context.messages):
+            if msg["role"] == "user":
+                last_user = msg.get("content", "")
+                break
+        logger.info("\n" + "="*60)
+        if last_user:
+            logger.info(f"🧠 LLM starting | User said: {last_user}")
+        else:
+            logger.info("🧠 LLM starting | No user text found")
         self.full_response_buffer = []  # Reset buffer
     
     async def _on_function_calls_finished(self, chat_context):
