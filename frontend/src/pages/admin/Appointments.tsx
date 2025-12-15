@@ -173,11 +173,10 @@ const Appointments = () => {
   // Effect to validate when form times change and auto-set end time
   useEffect(() => {
     if (formData.start_time) {
-      validateAndUpdateTime(formData.start_time, formData.end_time);
+      const startDate = new Date(formData.start_time);
       
-      // Auto-set end time to 30 minutes after start time if end time is not set
+      // Auto-set end time to 30 minutes after start time if end time is not set or needs adjustment
       if (!formData.end_time) {
-        const startDate = new Date(formData.start_time);
         const endDate = new Date(startDate.getTime() + 30 * 60000); // Add 30 minutes
         
         // Format to datetime-local format (YYYY-MM-DDTHH:MM)
@@ -189,13 +188,41 @@ const Appointments = () => {
         const endTimeString = `${year}-${month}-${day}T${hours}:${minutes}`;
         
         setFormData(prev => ({ ...prev, end_time: endTimeString }));
+      } else {
+        // If end time is already set, check if it's before start time or more than 3 hours after
+        const endDate = new Date(formData.end_time);
+        const maxEndDate = new Date(startDate.getTime() + 180 * 60000); // 3 hours max
+        
+        if (endDate <= startDate) {
+          // End time is before or equal to start time, auto-adjust
+          const newEndDate = new Date(startDate.getTime() + 30 * 60000);
+          const year = newEndDate.getFullYear();
+          const month = String(newEndDate.getMonth() + 1).padStart(2, '0');
+          const day = String(newEndDate.getDate()).padStart(2, '0');
+          const hours = String(newEndDate.getHours()).padStart(2, '0');
+          const minutes = String(newEndDate.getMinutes()).padStart(2, '0');
+          const endTimeString = `${year}-${month}-${day}T${hours}:${minutes}`;
+          setFormData(prev => ({ ...prev, end_time: endTimeString }));
+        } else if (endDate > maxEndDate) {
+          // End time is more than 3 hours after start, cap it
+          const year = maxEndDate.getFullYear();
+          const month = String(maxEndDate.getMonth() + 1).padStart(2, '0');
+          const day = String(maxEndDate.getDate()).padStart(2, '0');
+          const hours = String(maxEndDate.getHours()).padStart(2, '0');
+          const minutes = String(maxEndDate.getMinutes()).padStart(2, '0');
+          const endTimeString = `${year}-${month}-${day}T${hours}:${minutes}`;
+          setFormData(prev => ({ ...prev, end_time: endTimeString }));
+        }
       }
+      
+      // Validate after adjusting times
+      validateAndUpdateTime(formData.start_time, formData.end_time);
     }
   }, [formData.start_time]);
 
   const handleCreateAppointment = async () => {
     if (!formData.patient_id || !formData.start_time || !formData.end_time || !formData.reason) {
-      toast.error('Please fill in all required fields');
+      toast.error('❌ Missing Fields: Please fill in all required fields (Patient, Start Time, End Time, and Reason)');
       return;
     }
 
@@ -205,19 +232,21 @@ const Appointments = () => {
     const now = new Date();
 
     if (startDate < now) {
-      toast.error('Start time cannot be in the past');
+      toast.error('❌ Invalid Time: Start time cannot be in the past. Please select a future date and time.');
       return;
     }
 
     if (endDate <= startDate) {
-      toast.error('End time must be after start time');
+      toast.error('❌ Invalid Time: End time must be after start time. Please adjust your selection.');
       return;
     }
 
     // Validate maximum appointment duration (3 hours = 180 minutes)
     const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
     if (durationMinutes > 180) {
-      toast.error('Appointment duration cannot exceed 3 hours');
+      const hours = Math.floor(durationMinutes / 60);
+      const mins = durationMinutes % 60;
+      toast.error(`❌ Duration Too Long: Selected duration is ${hours}h ${mins}m. Maximum allowed is 3 hours.`);
       return;
     }
 
@@ -225,7 +254,7 @@ const Appointments = () => {
     const validation = await validateAppointmentTime(startDate, durationMinutes);
     
     if (!validation.isValid) {
-      toast.error(validation.error || 'Invalid appointment time');
+      toast.error(`⚠️ ${validation.error || 'Invalid appointment time'}`);
       return;
     }
 
@@ -243,7 +272,7 @@ const Appointments = () => {
       };
 
       await appointmentApi.create(createData);
-      toast.success('Appointment created successfully');
+      toast.success('✅ Appointment created successfully');
       setIsCreateDialogOpen(false);
       resetForm();
       loadData();
@@ -254,7 +283,7 @@ const Appointments = () => {
 
   const handleUpdateAppointment = async () => {
     if (!selectedAppointment || !formData.start_time || !formData.end_time || !formData.reason) {
-      toast.error('Please fill in all required fields');
+      toast.error('❌ Missing Fields: Please fill in all required fields (Start Time, End Time, and Reason)');
       return;
     }
 
@@ -263,14 +292,16 @@ const Appointments = () => {
     const endDate = new Date(formData.end_time);
 
     if (endDate <= startDate) {
-      toast.error('End time must be after start time');
+      toast.error('❌ Invalid Time: End time must be after start time. Please adjust your selection.');
       return;
     }
 
     // Validate maximum appointment duration (3 hours = 180 minutes)
     const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
     if (durationMinutes > 180) {
-      toast.error('Appointment duration cannot exceed 3 hours');
+      const hours = Math.floor(durationMinutes / 60);
+      const mins = durationMinutes % 60;
+      toast.error(`❌ Duration Too Long: Selected duration is ${hours}h ${mins}m. Maximum allowed is 3 hours.`);
       return;
     }
 
@@ -278,7 +309,7 @@ const Appointments = () => {
     const validation = await validateAppointmentTime(startDate, durationMinutes);
     
     if (!validation.isValid) {
-      toast.error(validation.error || 'Invalid appointment time');
+      toast.error(`⚠️ ${validation.error || 'Invalid appointment time'}`);
       return;
     }
 
@@ -295,7 +326,7 @@ const Appointments = () => {
       };
 
       await appointmentApi.update(selectedAppointment.id, updateData);
-      toast.success('Appointment updated successfully');
+      toast.success('✅ Appointment updated successfully');
       setIsEditDialogOpen(false);
       resetForm();
       loadData();

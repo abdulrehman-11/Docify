@@ -32,7 +32,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { UserPlus, Edit2, Trash2, Users as UsersIcon, Eye, EyeOff } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { UserPlus, Edit2, Trash2, Users as UsersIcon, Eye, EyeOff, Info } from 'lucide-react';
 import { staffApi } from '@/lib/api';
 import type { Staff, StaffCreate, StaffUpdate } from '@/lib/api/types';
 import { toast } from 'sonner';
@@ -346,6 +347,14 @@ const StaffManagement = () => {
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
+            {selectedStaff && (
+              <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                  For security, passwords are encrypted and cannot be viewed. Leave the password field blank to keep the current password, or enter a new password to update it.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="name">Full Name *</Label>
               <Input

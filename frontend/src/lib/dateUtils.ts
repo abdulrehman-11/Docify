@@ -16,8 +16,6 @@ export function parseUTCDate(dateString: string): Date {
     throw new Error('Invalid date string');
   }
   
-  console.log('🔍 Parsing date from backend:', dateString);
-  
   // Extract date/time components without timezone conversion
   const isoStr = dateString.replace(/[Z+].*$/, ''); // Remove Z or +00:00
   
@@ -26,12 +24,8 @@ export function parseUTCDate(dateString: string): Date {
   
   // Check if parsing was successful
   if (isNaN(date.getTime())) {
-    console.error('❌ Failed to parse date:', dateString);
     throw new Error(`Invalid date format: ${dateString}`);
   }
-  
-  console.log('   ✅ Parsed as wall clock time:', date.toLocaleString());
-  console.log('   📍 Display time:', date.toString());
   
   return date;
 }
@@ -84,8 +78,6 @@ export function formatBackendDate(dateString: string, formatStr: string = 'MMM d
  * @returns Naive ISO8601 string (e.g., "2025-11-14T14:00:00")
  */
 export function localDateTimeToUTC(localDateTimeString: string): string {
-  console.log('🔄 Converting datetime-local to naive ISO:', localDateTimeString);
-  
   // datetime-local format is "YYYY-MM-DDTHH:MM"
   // We want to keep the same wall clock time, just add seconds if missing
   let isoString = localDateTimeString;
@@ -94,10 +86,6 @@ export function localDateTimeToUTC(localDateTimeString: string): string {
   if (isoString.length === 16) {
     isoString += ':00';
   }
-  
-  console.log('   📍 Input from datetime-local:', localDateTimeString);
-  console.log('   🌍 Output (naive ISO):', isoString);
-  console.log('   ⚠️  Note: No timezone conversion - wall clock time preserved');
   
   return isoString;
 }
