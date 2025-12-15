@@ -19,6 +19,7 @@ from services.appointment_service import AppointmentService
 from services.patient_service import PatientService
 from services.google_calendar_service import get_calendar_service
 from services.email_service import get_email_service  # ADD THIS IMPORT
+from utils.sanitize import sanitize_name, sanitize_email
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +73,19 @@ async def check_availability(i: CheckAvailabilityInput) -> CheckAvailabilityOutp
 
 async def book_appointment(i: BookAppointmentInput) -> BookAppointmentOutput:
   """Book appointment with conflict detection, Google Calendar, and EMAIL confirmation."""
+  safe_name = sanitize_name(i.name)
+  safe_email = sanitize_email(i.email)
+
   logger.info("Executing book_appointment handler")
-  logger.info(f"Booking details - Name: {i.name}, Email: {i.email}, Slot: {i.slot_start[11:16]}-{i.slot_end[11:16]}")
+  logger.info(f"Booking details - Name: {safe_name}, Email: {safe_email}, Slot: {i.slot_start[11:16]}-{i.slot_end[11:16]}")
 
   async with _session_factory() as session:
     try:
       # Find or create patient
       patient_service = PatientService(session)
+      # Pass sanitized name/email into patient creation
+      i.name = safe_name
+      i.email = safe_email
       patient = await patient_service.find_or_create_patient(i)
       logger.info(f"Patient resolved - ID: {patient.id}, Email: {patient.email}")
 
@@ -156,6 +163,7 @@ async def lookup_appointment(i: LookupAppointmentInput) -> LookupAppointmentOutp
   
   Returns appointments with ANY status (confirmed, cancelled, completed) to allow operations on cancelled appointments.
   """
+  i.name = sanitize_name(i.name)
   logger.info(f"Executing lookup_appointment handler for patient: {i.name}")
   async with _session_factory() as session:
     appointment_service = AppointmentService(session)
@@ -198,6 +206,7 @@ async def lookup_appointment(i: LookupAppointmentInput) -> LookupAppointmentOutp
 
 async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutput:
   """Cancel appointment by patient name and time, remove from Google Calendar, and SEND cancellation email."""
+  i.name = sanitize_name(i.name)
   logger.info("Executing cancel_appointment handler")
   async with _session_factory() as session:
     appointment_service = AppointmentService(session)
@@ -272,6 +281,7 @@ async def cancel_appointment(i: CancelAppointmentInput) -> CancelAppointmentOutp
 
 async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleAppointmentOutput:
   """Reschedule appointment to new time, update Google Calendar, and SEND reschedule email."""
+  i.name = sanitize_name(i.name)
   logger.info("Executing reschedule_appointment handler")
   async with _session_factory() as session:
     appointment_service = AppointmentService(session)
@@ -355,7 +365,8 @@ async def reschedule_appointment(i: RescheduleAppointmentInput) -> RescheduleApp
 
 async def get_upcoming_appointments(i: GetUpcomingAppointmentsInput) -> GetUpcomingAppointmentsOutput:
   """Get all upcoming confirmed appointments for a patient from now onward."""
-  logger.info("Executing get_upcoming_appointments handler")
+  i.name = sanitize_name(i.name)
+  logger.info(f"Executing get_upcoming_appointments handler for {i.name}")
   async with _session_factory() as session:
     service = AppointmentService(session)
 
@@ -438,7 +449,9 @@ async def escalate_to_human(i: EscalateToHumanInput) -> EscalateToHumanOutput:
 
 
 async def send_confirmation(i: SendConfirmationInput) -> SendConfirmationOutput:
-  logger.info("Executing send_confirmation handler")
+  if i.channel == "email":
+    i.address = sanitize_email(i.address)
+  logger.info(f"Executing send_confirmation handler to {i.channel}: {i.address}")
   return SendConfirmationOutput(status="sent")
 
 

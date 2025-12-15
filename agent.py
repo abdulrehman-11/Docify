@@ -668,9 +668,46 @@ async def entrypoint(ctx: JobContext):
     livekit_tools = create_livekit_tools(router)
     logger.info(f"📦 Registered {len(router.list_tools())} tools")
 
-    # ===== TTS SELECTION: Cartesia -> Deepgram TTS -> ElevenLabs (OpenAI TTS commented) =====
+    # ===== TTS SELECTION: ElevenLabs -> Deepgram -> Cartesia (OpenAI TTS commented) =====
     def build_tts():
-        # 1) Cartesia (preferred)
+        # 1) ElevenLabs (preferred)
+        eleven_labs_key = os.getenv("ELEVEN_LABS")
+        if eleven_labs_key:
+            voice_id = os.getenv("ELEVEN_VOICE_ID", "O4cGUVdAocn0z4EpQ9yF")
+            model = os.getenv("ELEVEN_MODEL", "eleven_turbo_v2_5")
+            masked_key = eleven_labs_key[:4] + "****" + eleven_labs_key[-4:] if len(eleven_labs_key) > 8 else "****"
+            logger.info(f"✅ ELEVEN_LABS key found: {masked_key}")
+            logger.info(f"🎙️  Using ElevenLabs TTS (voice={voice_id}, model={model})")
+
+            health_err = elevenlabs_healthcheck(eleven_labs_key, voice_id, model)
+            if health_err:
+                logger.warning(f"🔎 ElevenLabs healthcheck flagged an issue ({health_err}). "
+                               f"Agent will continue and try next fallback.")
+            else:
+                try:
+                    return el_tts.TTS(
+                        voice_id=voice_id,
+                        model=model,
+                        api_key=eleven_labs_key,
+                        enable_ssml_parsing=False,
+                        chunk_length_schedule=[100, 160, 220],
+                        streaming_latency=2,
+                    )
+                except Exception as e:
+                    logger.error(f"❌ ElevenLabs TTS init failed, will fallback: {e}")
+
+        # 2) Deepgram TTS (secondary)
+        dg_key = os.getenv("DEEPGRAM_API_KEY")
+        if dg_key:
+            try:
+                dg_model = os.getenv("DEEPGRAM_TTS_MODEL", "aura-2-electra-en")
+                logger.info(f"🎙️  Using Deepgram TTS fallback (model={dg_model})")
+                # Deepgram TTS expects 'model', not 'voice'
+                return deepgram.TTS(model=dg_model, api_key=dg_key)
+            except Exception as e:
+                logger.error(f"❌ Deepgram TTS init failed, will fallback: {e}")
+
+        # 3) Cartesia TTS (tertiary)
         cartesia_key = os.getenv("CARTESIA_API_KEY")
         cartesia_voice = os.getenv("CARTESIA_VOICE_ID", "af_sarah")
         cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-english")
@@ -686,45 +723,9 @@ async def entrypoint(ctx: JobContext):
                     model=cartesia_model,
                 )
             except Exception as e:
-                logger.error(f"❌ Cartesia TTS init failed, will fallback: {e}")
+                logger.error(f"❌ Cartesia TTS init failed, no more fallbacks: {e}")
 
-        # 2) Deepgram TTS (secondary)
-        dg_key = os.getenv("DEEPGRAM_API_KEY")
-        if dg_key:
-            try:
-                dg_model = os.getenv("DEEPGRAM_TTS_MODEL", "aura-2-electra-en")
-                logger.info(f"🎙️  Using Deepgram TTS fallback (model={dg_model})")
-                # Deepgram TTS expects 'model', not 'voice'
-                return deepgram.TTS(model=dg_model, api_key=dg_key)
-            except Exception as e:
-                logger.error(f"❌ Deepgram TTS init failed, will fallback: {e}")
-
-        # 4) ElevenLabs (final fallback with healthcheck)
-        logger.warning("⚠️ No Cartesia/OpenAI/Deepgram TTS available; falling back to ElevenLabs TTS")
-        eleven_labs_key = os.getenv("ELEVEN_LABS")
-        if not eleven_labs_key:
-            raise ValueError("No TTS provider configured. Set CARTESIA_API_KEY, OPENAI_API_KEY, DEEPGRAM_API_KEY, or ELEVEN_LABS.")
-
-        masked_key = eleven_labs_key[:4] + "****" + eleven_labs_key[-4:] if len(eleven_labs_key) > 8 else "****"
-        logger.info(f"✅ ELEVEN_LABS key found: {masked_key}")
-        voice_id = os.getenv("ELEVEN_VOICE_ID", "O4cGUVdAocn0z4EpQ9yF")
-        model = os.getenv("ELEVEN_MODEL", "eleven_turbo_v2_5")
-        logger.info(f"🎙️  Using ElevenLabs TTS (voice={voice_id}, model={model})")
-
-        # Run a quick healthcheck to surface HTTP errors (auth/quota/network) early.
-        health_err = elevenlabs_healthcheck(eleven_labs_key, voice_id, model)
-        if health_err:
-            logger.warning(f"🔎 ElevenLabs healthcheck flagged an issue ({health_err}). "
-                           f"Agent will still start and rely on runtime retries.")
-
-        return el_tts.TTS(
-            voice_id=voice_id,
-            model=model,
-            api_key=eleven_labs_key,
-            enable_ssml_parsing=False,
-            chunk_length_schedule=[100, 160, 220],
-            streaming_latency=2,
-        )
+        raise ValueError("No TTS provider configured or all TTS inits failed.")
 
     tts_instance = build_tts()
 
