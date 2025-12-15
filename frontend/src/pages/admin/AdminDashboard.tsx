@@ -23,23 +23,16 @@ const AdminDashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      console.log('Loading dashboard data...');
       
       const [statsData, todayData] = await Promise.all([
         dashboardApi.getStats(),
         dashboardApi.getTodayAppointments(),
       ]);
       
-      console.log('Stats data:', statsData);
-      console.log('Today data:', todayData);
-      
       setStats(statsData);
       setTodayAppointments(todayData);
-      console.log('Dashboard data loaded successfully');
     } catch (error: any) {
       console.error('Failed to load dashboard data:', error);
-      console.error('Error details:', error.response?.data);
-      console.error('Error status:', error.response?.status);
       toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);

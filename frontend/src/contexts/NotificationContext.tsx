@@ -46,7 +46,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [checkedAppointments, setCheckedAppointments] = useState<Set<number>>(new Set());
 
   const showFloatingNotification = useCallback((notification: Notification) => {
-    console.log('[FloatingNotification] Showing:', notification);
     setFloatingNotifications(prev => {
       // Only keep max 3 floating notifications
       const newNotifications = [notification, ...prev].slice(0, 3);
@@ -64,20 +63,16 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   }, []);
 
   const fetchNotifications = useCallback(async () => {
-    console.log('[NotificationContext] fetchNotifications called, userRole:', userRole);
     if (!userRole) {
-      console.log('[NotificationContext] No userRole, skipping fetch');
       return;
     }
 
     try {
-      console.log('[NotificationContext] Fetching notifications for:', userRole);
       const data = await notificationApi.getNotifications({
         user_role: userRole,
         limit: 50,
       });
       
-      console.log('[NotificationContext] Fetched notifications:', data);
       setNotifications(data.notifications);
       setUnreadCount(data.unread_count);
     } catch (error) {
@@ -92,9 +87,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       const now = new Date();
       const fiveMinutesFromNow = new Date(now.getTime() + UPCOMING_APPOINTMENT_THRESHOLD * 60000);
       
-      console.log('[UpcomingCheck] Current time:', now.toISOString());
-      console.log('[UpcomingCheck] Checking for appointments within 5 minutes');
-      
       // Get today's appointments
       const today = now.toISOString().split('T')[0];
       const { appointments } = await appointmentApi.getAll({
@@ -103,19 +95,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         status: 'CONFIRMED',
       });
 
-      console.log(`[UpcomingCheck] Found ${appointments.length} confirmed appointments today`);
-
       appointments.forEach((appointment) => {
         const startTime = parseISO(appointment.start_time);
         const minutesUntil = differenceInMinutes(startTime, now);
-
-        console.log(`[UpcomingCheck] Appointment ID ${appointment.id}:`, {
-          patient: appointment.patient_name,
-          startTime: startTime.toISOString(),
-          minutesUntil,
-          alreadyChecked: checkedAppointments.has(appointment.id),
-          isWithinThreshold: minutesUntil > 0 && minutesUntil <= UPCOMING_APPOINTMENT_THRESHOLD,
-        });
 
         // Check if appointment is within 5 minutes and hasn't been checked yet
         if (
@@ -125,8 +107,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
           isBefore(now, startTime) &&
           isAfter(fiveMinutesFromNow, startTime)
         ) {
-          console.log(`[UpcomingCheck] ⚠️ SHOWING NOTIFICATION for appointment ${appointment.id}`);
-          
           // Create floating notification
           const notification: Notification = {
             id: Date.now() + appointment.id, // Temporary ID for floating notification

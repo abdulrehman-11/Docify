@@ -99,13 +99,6 @@ const Appointments = () => {
         patientApi.getAll(),
       ]);
       
-      console.log('🔍 RAW API RESPONSE:', appointmentsData);
-      console.log('🔍 First appointment:', appointmentsData.appointments[0]);
-      if (appointmentsData.appointments[0]) {
-        console.log('🔍 Start time from API:', appointmentsData.appointments[0].start_time);
-        console.log('🔍 Start time type:', typeof appointmentsData.appointments[0].start_time);
-      }
-      
       setAppointments(appointmentsData.appointments);
       setPatients(patientsData.patients);
     } catch (error: any) {
@@ -177,12 +170,28 @@ const Appointments = () => {
     }
   };
 
-  // Effect to validate when form times change
+  // Effect to validate when form times change and auto-set end time
   useEffect(() => {
     if (formData.start_time) {
       validateAndUpdateTime(formData.start_time, formData.end_time);
+      
+      // Auto-set end time to 30 minutes after start time if end time is not set
+      if (!formData.end_time) {
+        const startDate = new Date(formData.start_time);
+        const endDate = new Date(startDate.getTime() + 30 * 60000); // Add 30 minutes
+        
+        // Format to datetime-local format (YYYY-MM-DDTHH:MM)
+        const year = endDate.getFullYear();
+        const month = String(endDate.getMonth() + 1).padStart(2, '0');
+        const day = String(endDate.getDate()).padStart(2, '0');
+        const hours = String(endDate.getHours()).padStart(2, '0');
+        const minutes = String(endDate.getMinutes()).padStart(2, '0');
+        const endTimeString = `${year}-${month}-${day}T${hours}:${minutes}`;
+        
+        setFormData(prev => ({ ...prev, end_time: endTimeString }));
+      }
     }
-  }, [formData.start_time, formData.end_time]);
+  }, [formData.start_time]);
 
   const handleCreateAppointment = async () => {
     if (!formData.patient_id || !formData.start_time || !formData.end_time || !formData.reason) {
@@ -205,8 +214,14 @@ const Appointments = () => {
       return;
     }
 
-    // Validate against clinic hours and holidays
+    // Validate maximum appointment duration (3 hours = 180 minutes)
     const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
+    if (durationMinutes > 180) {
+      toast.error('Appointment duration cannot exceed 3 hours');
+      return;
+    }
+
+    // Validate against clinic hours and holidays
     const validation = await validateAppointmentTime(startDate, durationMinutes);
     
     if (!validation.isValid) {
@@ -219,13 +234,6 @@ const Appointments = () => {
       // We need to convert to UTC for storage
       const startISO = localDateTimeToUTC(formData.start_time);
       const endISO = localDateTimeToUTC(formData.end_time);
-      
-      console.log('🔄 Creating appointment:', {
-        localStartTime: formData.start_time,
-        localEndTime: formData.end_time,
-        utcStartTime: startISO,
-        utcEndTime: endISO
-      });
       
       const createData: AppointmentCreate = {
         patient_id: formData.patient_id,
@@ -259,8 +267,14 @@ const Appointments = () => {
       return;
     }
 
-    // Validate against clinic hours and holidays
+    // Validate maximum appointment duration (3 hours = 180 minutes)
     const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60));
+    if (durationMinutes > 180) {
+      toast.error('Appointment duration cannot exceed 3 hours');
+      return;
+    }
+
+    // Validate against clinic hours and holidays
     const validation = await validateAppointmentTime(startDate, durationMinutes);
     
     if (!validation.isValid) {
@@ -273,13 +287,6 @@ const Appointments = () => {
       // We need to convert to UTC for storage
       const startISO = localDateTimeToUTC(formData.start_time);
       const endISO = localDateTimeToUTC(formData.end_time);
-      
-      console.log('🔄 Updating appointment:', {
-        localStartTime: formData.start_time,
-        localEndTime: formData.end_time,
-        utcStartTime: startISO,
-        utcEndTime: endISO
-      });
       
       const updateData: AppointmentUpdate = {
         start_time: startISO,
@@ -421,12 +428,6 @@ const Appointments = () => {
     }
     
     return true;
-  });
-
-  console.log(`📊 Filtering results: ${filteredAppointments.length} appointments shown out of ${appointments.length} total`, {
-    filterStatus,
-    selectedDate,
-    searchQuery
   });
 
   return (
@@ -632,12 +633,16 @@ const Appointments = () => {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="end_time">End Time</Label>
+              <Label htmlFor="end_time">End Time (Max 3 hours from start)</Label>
               <Input
                 id="end_time"
                 type="datetime-local"
                 value={formData.end_time}
                 min={formData.start_time || format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                max={formData.start_time ? (() => {
+                  const maxEnd = new Date(new Date(formData.start_time).getTime() + 180 * 60000);
+                  return format(maxEnd, "yyyy-MM-dd'T'HH:mm");
+                })() : undefined}
                 onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
               />
             </div>
@@ -722,12 +727,16 @@ const Appointments = () => {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-end_time">End Time</Label>
+              <Label htmlFor="edit-end_time">End Time (Max 3 hours from start)</Label>
               <Input
                 id="edit-end_time"
                 type="datetime-local"
                 value={formData.end_time}
                 min={formData.start_time}
+                max={formData.start_time ? (() => {
+                  const maxEnd = new Date(new Date(formData.start_time).getTime() + 180 * 60000);
+                  return format(maxEnd, "yyyy-MM-dd'T'HH:mm");
+                })() : undefined}
                 onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
               />
             </div>

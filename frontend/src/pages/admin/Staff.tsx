@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { UserPlus, Edit2, Trash2, Users as UsersIcon } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, Users as UsersIcon, Eye, EyeOff } from 'lucide-react';
 import { staffApi } from '@/lib/api';
 import type { Staff, StaffCreate, StaffUpdate } from '@/lib/api/types';
 import { toast } from 'sonner';
@@ -60,6 +60,8 @@ const StaffManagement = () => {
     confirmPassword: '',
     permissions: {} as Record<string, boolean>,
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     loadStaff();
@@ -85,6 +87,8 @@ const StaffManagement = () => {
       confirmPassword: '',
       permissions: {},
     });
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const handleAddStaff = () => {
@@ -369,26 +373,50 @@ const StaffManagement = () => {
                   Password {!selectedStaff && '*'}
                   {selectedStaff && <span className="text-xs text-muted-foreground ml-1">(leave blank to keep current)</span>}
                 </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder={selectedStaff ? "Leave blank to keep current" : "Minimum 6 characters"}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder={selectedStaff ? "Leave blank to keep current" : "Minimum 6 characters"}
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="confirmPassword">
                   Confirm Password {!selectedStaff && '*'}
                 </Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  placeholder="Confirm password"
-                />
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    placeholder="Confirm password"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
             </div>
 

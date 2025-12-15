@@ -30,8 +30,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Users, Search, Plus, Edit, Trash2 } from "lucide-react";
-import { patientApi } from "@/lib/api";
+import { Users, Search, Plus, Edit, Trash2, AlertTriangle } from "lucide-react";
+import { patientApi, appointmentApi } from "@/lib/api";
 import type { Patient } from "@/lib/api/types";
 import { toast } from "sonner";
 
@@ -45,6 +45,8 @@ const Patients = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
+  const [patientAppointmentCount, setPatientAppointmentCount] = useState(0);
   
   // Form states
   const [formData, setFormData] = useState({
@@ -122,8 +124,10 @@ const Patients = () => {
     try {
       await patientApi.delete(selectedPatient.id);
       toast.success("Patient deleted successfully");
+      setIsConfirmDeleteDialogOpen(false);
       setIsDeleteDialogOpen(false);
       setSelectedPatient(null);
+      setPatientAppointmentCount(0);
       loadPatients();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Failed to delete patient");
@@ -141,8 +145,17 @@ const Patients = () => {
     setIsEditDialogOpen(true);
   };
 
-  const openDeleteDialog = (patient: Patient) => {
+  const openDeleteDialog = async (patient: Patient) => {
     setSelectedPatient(patient);
+    
+    // Fetch appointment count for this patient
+    try {
+      const appointmentsData = await appointmentApi.getAll({ patientId: patient.id });
+      setPatientAppointmentCount(appointmentsData.appointments.length);
+    } catch (error) {
+      setPatientAppointmentCount(0);
+    }
+    
     setIsDeleteDialogOpen(true);
   };
 
@@ -387,20 +400,85 @@ const Patients = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* First Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the patient record for{" "}
-              <strong>{selectedPatient?.name}</strong>. This action cannot be undone.
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              Delete Patient?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                You are about to delete <strong>{selectedPatient?.name}</strong>.
+              </p>
+              {patientAppointmentCount > 0 && (
+                <p className="text-red-600 font-semibold">
+                  Warning: This patient has {patientAppointmentCount} appointment{patientAppointmentCount !== 1 ? 's' : ''} that will also be deleted.
+                </p>
+              )}
+              <p>
+                This action cannot be undone.
+              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeletePatient} className="bg-red-500">
-              Delete
+            <AlertDialogAction 
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setIsConfirmDeleteDialogOpen(true);
+              }} 
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Continue to Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Second Confirmation Dialog */}
+      <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-6 h-6" />
+              Final Confirmation Required
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p className="text-base font-semibold">
+                This operation cannot be undone!
+              </p>
+              <p>
+                Deleting <strong>{selectedPatient?.name}</strong> will:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Permanently remove the patient record</li>
+                {patientAppointmentCount > 0 && (
+                  <li className="text-red-600 font-semibold">
+                    Delete {patientAppointmentCount} associated appointment{patientAppointmentCount !== 1 ? 's' : ''}
+                  </li>
+                )}
+                <li>Remove all patient history and data</li>
+              </ul>
+              <p className="text-red-600 font-semibold mt-4">
+                Are you absolutely sure you want to proceed?
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setIsConfirmDeleteDialogOpen(false);
+              setSelectedPatient(null);
+              setPatientAppointmentCount(0);
+            }}>
+              Cancel - Keep Patient
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeletePatient} 
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Yes, Delete Permanently
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
